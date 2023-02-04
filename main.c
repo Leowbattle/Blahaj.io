@@ -385,6 +385,10 @@ struct {
 	Model* model;
 } Blahaj;
 
+void Blahaj_init() {
+	Blahaj.model = Model_load("data/models/blahaj.obj");
+}
+
 void Blahaj_update() {
 	glUseProgram(texturedShader);
 	glBindVertexArray(Blahaj.model->vao);
@@ -401,6 +405,116 @@ void Blahaj_update() {
 	glUniformMatrix4fv(view_loc, 1, GL_FALSE, (float*)viewMat);
 
 	glDrawArrays(GL_TRIANGLES, 0, Blahaj.model->vertexCount);
+}
+
+struct {
+	GLuint vao;
+	GLuint ebo;
+	GLuint vbo_xy;
+	GLuint vbo_u;
+
+	float* u;
+	float* dudt;
+	float c;
+	int sim_size;
+	float size;
+
+	GLuint shader;
+} Water;
+
+GLuint mat_loc2;
+GLuint view_loc2;
+
+void Water_init() {
+	Water.sim_size = 100;
+	Water.c = 40;
+	Water.size = 10;
+	Water.u = xmalloc(Water.sim_size * Water.sim_size * sizeof(float));
+	Water.dudt = xmalloc(Water.sim_size * Water.sim_size * sizeof(float));
+
+	glGenVertexArrays(1, &Water.vao);
+	glBindVertexArray(Water.vao);
+
+	glGenBuffers(1, &Water.ebo);
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, Water.ebo);
+
+	int numTris = (Water.sim_size - 1) * (Water.sim_size - 1) * 2;
+	unsigned int* indices = xmalloc(numTris * 3 * sizeof(unsigned int));
+	int indicesI = 0;
+	for (int i = 0; i < Water.sim_size - 1; i++) {
+		for (int j = 0; j < Water.sim_size - 1; j++) {
+			indices[indicesI++] = j * Water.sim_size + i;
+			indices[indicesI++] = (j + 1) * Water.sim_size + i;
+			indices[indicesI++] = j * Water.sim_size + i + 1;
+
+			indices[indicesI++] = j * Water.sim_size + i + 1;
+			indices[indicesI++] = (j + 1) * Water.sim_size + i;
+			indices[indicesI++] = (j + 1) * Water.sim_size + i + 1;
+		}
+	}
+	glBufferData(GL_ELEMENT_ARRAY_BUFFER, numTris * 3 * sizeof(unsigned int), indices, GL_STATIC_DRAW);
+
+	glGenBuffers(1, &Water.vbo_xy);
+	glBindBuffer(GL_ARRAY_BUFFER, Water.vbo_xy);
+	
+	float* xy = xmalloc(Water.sim_size * Water.sim_size * 2 * sizeof(float));
+	for (int i = 0; i < Water.sim_size; i++) {
+		for (int j = 0; j < Water.sim_size; j++) {
+			float x = mapf(j, 0, Water.sim_size - 1, -Water.size / 2, Water.size / 2);
+			float y = mapf(i, 0, Water.sim_size - 1, -Water.size / 2, Water.size / 2);
+
+			xy[2 * (i * Water.sim_size + j) + 0] = x;
+			xy[2 * (i * Water.sim_size + j) + 1] = y;
+		}
+	}
+	glBufferData(GL_ARRAY_BUFFER, Water.sim_size * Water.sim_size * 2 * sizeof(float), xy, GL_STATIC_DRAW);
+
+	glEnableVertexAttribArray(0);
+	glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, 0);
+
+	glGenBuffers(1, &Water.vbo_u);
+	glBindBuffer(GL_ARRAY_BUFFER, Water.vbo_u);
+	glBufferData(GL_ARRAY_BUFFER, Water.sim_size * Water.sim_size * sizeof(float), NULL, GL_STREAM_DRAW);
+
+	glEnableVertexAttribArray(1);
+	glVertexAttribPointer(1, 1, GL_FLOAT, GL_FALSE, 0, 0);
+
+	Water.shader = loadShaderProg("data/shaders/water.vs", "data/shaders/water.fs");
+	mat_loc2 = glGetUniformLocation(Water.shader, "u_mat");
+	view_loc2 = glGetUniformLocation(Water.shader, "u_view");
+}
+
+void Water_step_sim() {
+	for (int i = 0; i < Water.sim_size; i++) {
+		for (int j = 0; j < Water.sim_size; j++) {
+			float x = mapf(j, 0, Water.sim_size - 1, -Water.size / 2, Water.size / 2);
+			float y = mapf(i, 0, Water.sim_size - 1, -Water.size / 2, Water.size / 2);
+
+			Water.u[i * Water.sim_size + j] = sin(x * x + y * y + globalTime) / 4;
+		}
+	}
+
+	glBufferSubData(GL_ARRAY_BUFFER, 0, Water.sim_size * Water.sim_size * sizeof(float), Water.u);
+}
+
+void Water_update() {
+	glBindVertexArray(Water.vao);
+
+	Water_step_sim();
+
+	glUseProgram(Water.shader);
+
+	mat4 modelMat;
+	glm_mat4_identity(modelMat);
+
+	mat4 mvp;
+	glm_mat4_mul(projMat, viewMat, mvp);
+	glm_mat4_mul(mvp, modelMat, mvp);
+
+	glUniformMatrix4fv(mat_loc2, 1, GL_FALSE, (float*)mvp);
+	glUniformMatrix4fv(view_loc2, 1, GL_FALSE, (float*)viewMat);
+
+	glDrawElements(GL_LINES, Water.sim_size * Water.sim_size * 6, GL_UNSIGNED_INT, NULL);
 }
 
 void sigsegv_func(int signo) {
@@ -430,7 +544,8 @@ int main(int argc, char** argv) {
 	glEnable(GL_CULL_FACE);
 	glEnable(GL_DEPTH_TEST);
 
-	Blahaj.model = Model_load("data/models/blahaj.obj");
+	Blahaj_init();
+	Water_init();
 
 	texturedShader = loadShaderProg("data/shaders/shader.vs", "data/shaders/shader.fs");
 	mat_loc = glGetUniformLocation(texturedShader, "u_mat");
@@ -454,12 +569,13 @@ int main(int argc, char** argv) {
 
 		glm_perspective(deg2rad(90), width / (float)height, 0.1f, 10, projMat);
 		
-		vec3 eye = {3, 3, 3};
+		vec3 eye = {0, 2, 4};
 		vec3 center = {0, 0, 0};
 		vec3 up = {0, 1, 0};
 		glm_lookat(eye, center, up, viewMat);
 
 		Blahaj_update();
+		Water_update();
 
 		SDL_GL_SwapWindow(window);
 
