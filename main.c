@@ -759,7 +759,7 @@ int main(int argc, char** argv) {
 		// mat4_translate(&mat, (vec3){0, 0, 5});
 		// mat4_rotatex(&mat, deg2rad(90));
 
-		mat4_rotatey(&mat, frameNo / 60.0f * deg2rad(120));
+		mat4_rotatey(&mat, frameNo / 60.0f * deg2rad(60));
 		mat4_rotatex(&mat, frameNo / 60.0f * deg2rad(60));
 		mat4_scale(&mat, (vec3){0.5f, 0.5f, 0.5f});
 
