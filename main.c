@@ -12,10 +12,14 @@
 #include <glad/glad.h>
 #include <SDL2/SDL.h>
 
-#define STB_IMAGE_IMPLEMENTATION
+// #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 
 #include <cglm/call.h>
+
+#define NANOVG_GL3_IMPLEMENTATION
+#include <nanovg.h>
+#include <nanovg_gl.h>
 
 #define PI 3.1415926
 
@@ -50,6 +54,8 @@ SDL_Window* window;
 SDL_Renderer* renderer;
 SDL_GLContext gl;
 bool running = true;
+
+struct NVGcontext* vg;
 
 int width = 1280;
 int height = 720;
@@ -404,6 +410,8 @@ void Blahaj_update() {
 	glUniformMatrix4fv(mat_loc, 1, GL_FALSE, (float*)mvp);
 	glUniformMatrix4fv(view_loc, 1, GL_FALSE, (float*)viewMat);
 
+	glBindTexture(GL_TEXTURE_2D, Blahaj.model->texture);
+
 	glDrawArrays(GL_TRIANGLES, 0, Blahaj.model->vertexCount);
 }
 
@@ -515,6 +523,8 @@ void Water_update() {
 	glUniformMatrix4fv(view_loc2, 1, GL_FALSE, (float*)viewMat);
 
 	glDrawElements(GL_LINES, Water.sim_size * Water.sim_size * 6, GL_UNSIGNED_INT, NULL);
+
+	glBindVertexArray(0);
 }
 
 void sigsegv_func(int signo) {
@@ -541,8 +551,8 @@ int main(int argc, char** argv) {
 
 	SDL_GL_SetSwapInterval(1);
 
-	glEnable(GL_CULL_FACE);
-	glEnable(GL_DEPTH_TEST);
+	vg = nvgCreateGL3(NVG_ANTIALIAS | NVG_STENCIL_STROKES);
+	nvgCreateFont(vg, "font", "data/Blinker-Regular.ttf");
 
 	Blahaj_init();
 	Water_init();
@@ -564,8 +574,13 @@ int main(int argc, char** argv) {
 			}
 		}
 
+		glEnable(GL_CULL_FACE);
+		glEnable(GL_DEPTH_TEST);
+		glDisable(GL_BLEND);
+		glDisable(GL_STENCIL);
+
 		glClearColor(0, 0, 0, 1);
-		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
 
 		glm_perspective(deg2rad(90), width / (float)height, 0.1f, 100, projMat);
 		
@@ -576,6 +591,16 @@ int main(int argc, char** argv) {
 
 		Blahaj_update();
 		Water_update();
+
+		nvgBeginFrame(vg, width, height, 1);
+
+		nvgFillColor(vg, nvgRGBA(255,192,0,255));
+		nvgFontSize(vg, 72.0f);
+		nvgFontFace(vg, "font");
+		nvgTextAlign(vg, NVG_ALIGN_TOP);
+		nvgText(vg, 0, 0, "Hello", NULL);
+
+		nvgEndFrame(vg);
 
 		SDL_GL_SwapWindow(window);
 
