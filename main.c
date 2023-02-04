@@ -426,9 +426,9 @@ GLuint mat_loc2;
 GLuint view_loc2;
 
 void Water_init() {
-	Water.sim_size = 100;
+	Water.sim_size = 500;
 	Water.c = 40;
-	Water.size = 10;
+	Water.size = 100;
 	Water.u = xmalloc(Water.sim_size * Water.sim_size * sizeof(float));
 	Water.dudt = xmalloc(Water.sim_size * Water.sim_size * sizeof(float));
 
@@ -490,7 +490,7 @@ void Water_step_sim() {
 			float x = mapf(j, 0, Water.sim_size - 1, -Water.size / 2, Water.size / 2);
 			float y = mapf(i, 0, Water.sim_size - 1, -Water.size / 2, Water.size / 2);
 
-			Water.u[i * Water.sim_size + j] = sin(x * x + y * y + globalTime) / 4;
+			Water.u[i * Water.sim_size + j] = sin(sqrtf(x * x + y * y)*4 + globalTime) / 16;
 		}
 	}
 
@@ -567,7 +567,7 @@ int main(int argc, char** argv) {
 		glClearColor(0, 0, 0, 1);
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-		glm_perspective(deg2rad(90), width / (float)height, 0.1f, 10, projMat);
+		glm_perspective(deg2rad(90), width / (float)height, 0.1f, 100, projMat);
 		
 		vec3 eye = {0, 2, 4};
 		vec3 center = {0, 0, 0};
