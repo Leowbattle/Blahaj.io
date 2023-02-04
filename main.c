@@ -432,6 +432,7 @@ void Blahaj_init() {
 
 	Blahaj.pitchTarget = 0;
 	Blahaj.pitch = 0;
+	Blahaj.roll = 0;
 
 	Blahaj.canJump = true;
 
@@ -447,9 +448,14 @@ void Blahaj_update() {
 	const float gravity = 3;
 	const float bouyancy = 5;
 	const float jumpImpulse = 3;
-	const float maxSpeedY = 10;
+	const float maxSpeedY = 4;
 
-	Blahaj.rollTarget = 0;
+	if (Blahaj.roll > PI) {
+		Blahaj.rollTarget = 2 * PI;
+	}
+	else {
+		Blahaj.rollTarget = 0;
+	}
 
 	if (keyboardState[SDL_SCANCODE_LEFT]) {
 		Blahaj.yaw += 0.1f;
@@ -466,6 +472,7 @@ void Blahaj_update() {
 	if (keyboardState[SDL_SCANCODE_SPACE] && Blahaj.canJump) {
 		Blahaj.speedY += jumpImpulse;
 		Blahaj.canJump = false;
+		Blahaj.rollTarget += 2 * PI;
 	}
 
 	bool aboveBefore = Blahaj.pos[1] > 0;
@@ -501,7 +508,13 @@ void Blahaj_update() {
 	}
 
 	Blahaj.pitch = lerpf(Blahaj.pitch, Blahaj.pitchTarget, 15 * dt);
-	Blahaj.roll = lerpf(Blahaj.roll, Blahaj.rollTarget, 15 * dt);
+	
+	if (Blahaj.canJump) {
+		Blahaj.roll = lerpf(Blahaj.roll, Blahaj.rollTarget, 15 * dt);
+	}
+	else {
+		Blahaj.roll += deg2rad(90) * dt;
+	}
 
 	vec3 v = {2, 2, 0};
 	glm_vec3_rotate(v, Blahaj.yaw, (vec3){0, 1, 0});
