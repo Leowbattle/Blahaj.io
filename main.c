@@ -409,6 +409,8 @@ struct {
 	vec3 dir;
 	float speed;
 
+	float scale;
+
 	Model* model;
 
 	float yaw;
@@ -430,6 +432,8 @@ void Blahaj_init() {
 	Blahaj.pitchTarget = 0;
 	Blahaj.pitch = 0;
 	Blahaj.roll = 0;
+
+	Blahaj.scale = 5;
 
 	glm_vec3_copy((vec3){0, 0, 0}, Blahaj.pos);
 	glm_vec3_copy((vec3){2, 2, 0}, Blahaj.camPos);
@@ -467,7 +471,7 @@ void Blahaj_update() {
 
 		Blahaj.speed = clampf(Blahaj.speed + acceleration * dt, 0, maxSpeed);
 
-		Water_add_pulse(0.25f, 0.05f, Blahaj.pos[0], Blahaj.pos[2]);
+		Water_add_pulse(0.25f * Blahaj.scale, 0.05f * Blahaj.scale, Blahaj.pos[0], Blahaj.pos[2]);
 	}
 	if (keyboardState[SDL_SCANCODE_DOWN]) {
 		accelerating = true;
@@ -484,7 +488,7 @@ void Blahaj_update() {
 	
 	Blahaj.roll = lerpf(Blahaj.roll, Blahaj.rollTarget, 15 * dt);
 
-	vec3 v = {4, 2, 0};
+	vec3 v = {4 * Blahaj.scale, 2 * Blahaj.scale, 0};
 	glm_vec3_rotate(v, Blahaj.yaw, (vec3){0, 1, 0});
 	glm_vec3_add(v, Blahaj.pos, Blahaj.camTarget);
 
@@ -504,6 +508,7 @@ void Blahaj_update() {
 	glm_rotate_y(modelMat, Blahaj.yaw, modelMat);
 	glm_rotate_z(modelMat, Blahaj.pitch, modelMat);
 	glm_rotate_x(modelMat, Blahaj.roll, modelMat);
+	glm_scale_uni(modelMat, Blahaj.scale);
 
 	mat4 mvp;
 	glm_mat4_mul(projMat, viewMat, mvp);
@@ -828,6 +833,57 @@ void Sky_update() {
 	glDepthMask(GL_TRUE);
 }
 
+typedef struct Fish {
+	vec3 pos;
+} Fish;
+
+Vector* fishes;
+Model* fishModel;
+
+void Fishs_init() {
+	fishModel = Model_load("data/models/blahaj.obj");
+
+	fishes = Vector_new(sizeof(Fish));
+
+	int n = 100;
+	for (int i = 0; i < n; i++) {
+		float ct = cosf((float)i / n * 2 * PI);
+		float st = sinf((float)i / n * 2 * PI);
+		float r = 10;
+
+		Fish fish;
+		fish.pos[0] = r * ct;
+		fish.pos[1] = 0;
+		fish.pos[2] = r * st;
+		Vector_add(fishes, &fish);
+	}
+}
+
+void Fishs_update() {
+	glUseProgram(texturedShader);
+	glBindVertexArray(fishModel->vao);
+
+	for (int i = 0; i < fishes->count; i++) {
+		Fish* fish = &((Fish*)fishes->data)[i];
+	
+		mat4 modelMat;
+		glm_mat4_identity(modelMat);
+		glm_translate(modelMat, fish->pos);
+
+		mat4 mvp;
+		glm_mat4_mul(projMat, viewMat, mvp);
+		glm_mat4_mul(mvp, modelMat, mvp);
+
+		glUniformMatrix4fv(mat_loc, 1, GL_FALSE, (float*)mvp);
+		glUniformMatrix4fv(view_loc, 1, GL_FALSE, (float*)viewMat);
+
+		glBindTexture(GL_TEXTURE_2D, fishModel->texture);
+
+		glDrawArrays(GL_TRIANGLES, 0, fishModel->vertexCount);
+	}
+
+}
+
 void sigsegv_func(int signo) {
 	panic("Segmentation fault\n");
 }
@@ -837,7 +893,8 @@ int main(int argc, char** argv) {
 
 	SDL_Init(SDL_INIT_EVERYTHING);
 
-	window = SDL_CreateWindow("RoyalHackaway", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, width, height, SDL_WINDOW_OPENGL);
+	window = SDL_CreateWindow("RoyalHackaway", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, width, height, SDL_WINDOW_OPENGL | SDL_WINDOW_FULLSCREEN_DESKTOP);
+	SDL_GetWindowSize(window, &width, &height);
 
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
@@ -858,6 +915,7 @@ int main(int argc, char** argv) {
 	Blahaj_init();
 	Water_init();
 	Sky_init();
+	Fishs_init();
 
 	texturedShader = loadShaderProg("data/shaders/shader.vs", "data/shaders/shader.fs");
 	mat_loc = glGetUniformLocation(texturedShader, "u_mat");
@@ -895,6 +953,7 @@ int main(int argc, char** argv) {
 
 		Sky_update();
 		Blahaj_update();
+		Fishs_update();
 		Water_update();
 
 		nvgBeginFrame(vg, width, height, 1);
