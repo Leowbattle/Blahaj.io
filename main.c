@@ -55,6 +55,8 @@ SDL_Renderer* renderer;
 SDL_GLContext gl;
 bool running = true;
 
+SDL_GameController* controller;
+
 struct NVGcontext* vg;
 
 int width = 1280;
@@ -389,13 +391,21 @@ GLuint tex_loc;
 struct {
 	vec3 pos;
 	Model* model;
+
+	vec3 camPos;
+	vec3 camTarget;
 } Blahaj;
 
 void Blahaj_init() {
 	Blahaj.model = Model_load("data/models/blahaj.obj");
+
+	glm_vec3_copy((vec3){0, 0, 0}, Blahaj.pos);
+	glm_vec3_copy((vec3){0, 1, 1}, Blahaj.camPos);
 }
 
 void Blahaj_update() {
+
+
 	glUseProgram(texturedShader);
 	glBindVertexArray(Blahaj.model->vao);
 
@@ -584,10 +594,8 @@ int main(int argc, char** argv) {
 
 		glm_perspective(deg2rad(90), width / (float)height, 0.1f, 100, projMat);
 		
-		vec3 eye = {0, 2, 4};
-		vec3 center = {0, 0, 0};
 		vec3 up = {0, 1, 0};
-		glm_lookat(eye, center, up, viewMat);
+		glm_lookat(Blahaj.camPos, Blahaj.pos, up, viewMat);
 
 		Blahaj_update();
 		Water_update();
