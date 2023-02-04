@@ -410,6 +410,8 @@ struct {
 	float speed;
 	float speedY;
 
+	bool canJump;
+
 	Model* model;
 
 	float yaw;
@@ -431,6 +433,8 @@ void Blahaj_init() {
 	Blahaj.pitchTarget = 0;
 	Blahaj.pitch = 0;
 
+	Blahaj.canJump = true;
+
 	glm_vec3_copy((vec3){0, 0, 0}, Blahaj.pos);
 	glm_vec3_copy((vec3){2, 2, 0}, Blahaj.camPos);
 }
@@ -441,8 +445,9 @@ void Blahaj_update() {
 	const float deceleration = 5;
 	const float maxSpeed = 5;
 	const float gravity = 3;
-	const float bouyancy = 30;
-	const float jumpImpulse = 10;
+	const float bouyancy = 5;
+	const float jumpImpulse = 3;
+	const float maxSpeedY = 10;
 
 	Blahaj.rollTarget = 0;
 
@@ -458,17 +463,25 @@ void Blahaj_update() {
 	glm_vec3_copy((vec3){-1, 0, 0}, Blahaj.dir);
 	glm_vec3_rotate(Blahaj.dir, Blahaj.yaw, (vec3){0, 1, 0});
 
-	if (keyboardState[SDL_SCANCODE_SPACE] && Blahaj.pos[1] <= 0) {
+	if (keyboardState[SDL_SCANCODE_SPACE] && Blahaj.canJump) {
 		Blahaj.speedY += jumpImpulse;
+		Blahaj.canJump = false;
 	}
+
+	bool aboveBefore = Blahaj.pos[1] > 0;
 	Blahaj.pos[1] += Blahaj.speedY * dt;
+	if (aboveBefore && Blahaj.pos[1] < 0) {
+		Blahaj.canJump = true;
+	}
 
 	if (Blahaj.pos[1] >= 0) {
 		Blahaj.speedY -= gravity * dt;
 	}
 	else if (Blahaj.pos[1] <= 0) {
-		Blahaj.speedY = 0;
+		Blahaj.speedY -= Blahaj.pos[1] * bouyancy * dt;
 	}
+
+	Blahaj.speedY = clampf(Blahaj.speedY, -maxSpeedY, maxSpeedY);
 
 	bool accelerating = false;
 	if (keyboardState[SDL_SCANCODE_UP]) {
