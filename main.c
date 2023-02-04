@@ -194,7 +194,38 @@ void mat4_translate(mat4* m, vec3 t) {
 
 void mat4_rotatex(mat4* m, float t);
 void mat4_rotatey(mat4* m, float t);
-void mat4_rotatez(mat4* m, float t);
+
+void mat4_rotatez(mat4* m, float t) {
+	float ct = cosf(t);
+	float st = sinf(t);
+
+	float* M = m->m;
+
+	mat4 m2 = {
+		M[0] * ct + M[1] * -st,
+		M[0] * st + M[1] * ct,
+		M[2],
+		M[3],
+
+		M[4] * ct + M[5] * -st,
+		M[4] * st + M[5] * ct,
+		M[6],
+		M[7],
+
+		M[8] * ct + M[9] * -st,
+		M[8] * st + M[9] * ct,
+		M[10],
+		M[11],
+
+		M[12] * ct + M[13] * -st,
+		M[12] * st + M[13] * ct,
+		M[14],
+		M[15],
+	};
+
+	memcpy(M, m2.m, sizeof(mat4));
+}
+
 void mat4_ypr(float yaw, float pitch, float roll);
 void mat4_lookat(mat4* m, vec3 pos, vec3 target, vec3 up);
 void mat4_frustum(mat4* m, float l, float r, float b, float t, float n, float f);
@@ -438,9 +469,12 @@ int main(int argc, char** argv) {
 		glBindVertexArray(vao);
 
 		mat4 mat;
+		// mat4_identity(&mat);
 		mat4_ortho(&mat, 0, width, 0, height, -1, 1);
-		mat4_print(&mat);
 		mat4_scale(&mat, (vec3){100, 100, 1});
+		mat4_translate(&mat, (vec3){0.5f, 0.5f, 0});
+		mat4_rotatez(&mat, frameNo / 60.0f * deg2rad(30));
+		mat4_translate(&mat, (vec3){-0.5f, -0.5f, 0});
 		glUniformMatrix4fv(mat_loc, 1, GL_TRUE, mat.m);
 
 		glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, NULL);
