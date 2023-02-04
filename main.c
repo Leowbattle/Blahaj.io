@@ -15,6 +15,8 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 
+#include <cglm/call.h>
+
 #define PI 3.1415926
 
 float deg2rad(float deg) {
@@ -42,338 +44,6 @@ float clampf(float x, float a, float b) {
 
 float lerpf(float a, float b, float t) {
 	return a + (b - a) * t;
-}
-
-typedef struct vec2 {
-	float x;
-	float y;
-} vec2;
-
-typedef struct vec3 {
-	float x;
-	float y;
-	float z;
-} vec3;
-
-vec3 vec3_add(vec3 a, vec3 b) {
-	return (vec3){a.x + b.x, a.y + b.y, a.z + b.z};
-}
-
-vec3 vec3_sub(vec3 a, vec3 b) {
-	return (vec3){a.x - b.x, a.y - b.y, a.z - b.z};
-}
-
-vec3 vec3_scale(vec3 a, float s) {
-	return (vec3){a.x * s, a.y * s, a.z * s};
-}
-
-float vec3_dot(vec3 a, vec3 b) {
-	return a.x * b.x + a.y * b.y + a.z * b.z;
-}
-
-vec3 vec3_cross(vec3 a, vec3 b) {
-	return (vec3){
-		a.y * b.z - a.z * b.y,
-		a.z * b.x - a.x * b.z,
-		a.x * b.y - a.y * b.x
-	};
-}
-
-float vec3_length(vec3 a) {
-	return sqrtf(a.x * a.x + a.y * a.y + a.z * a.z);
-}
-
-vec3 vec3_normalize(vec3 a) {
-	float m = vec3_length(a);
-	return (vec3){a.x / m, a.y / m, a.z / m};
-}
-
-typedef struct vec4 {
-	float x;
-	float y;
-	float z;
-	float w;
-} vec4;
-
-vec4 vec4_add(vec4 a, vec4 b) {
-	return (vec4){a.x + b.x, a.y + b.y, a.z + b.z, a.w + b.w};
-}
-
-vec4 vec4_sub(vec4 a, vec4 b) {
-	return (vec4){a.x - b.x, a.y - b.y, a.z - b.z, a.w - b.w};
-}
-
-vec4 vec4_scale(vec4 a, float s) {
-	return (vec4){a.x * s, a.y * s, a.z * s, a.w * s};
-}
-
-float vec4_dot(vec4 a, vec4 b) {
-	return a.x * b.x + a.y * b.y + a.z * b.z + a.w * b.w;
-}
-
-float vec4_length(vec4 a) {
-	return sqrtf(a.x * a.x + a.y * a.y + a.z * a.z + a.w * a.w);
-}
-
-vec4 vec4_normalize(vec4 a) {
-	float m = vec4_length(a);
-	return (vec4){a.x / m, a.y / m, a.z / m, a.w / m};
-}
-
-typedef struct mat4 {
-	float m[16];
-} mat4;
-
-void mat4_identity(mat4* m) {
-	float* M = m->m;
-
-	M[0] = 1;
-	M[1] = 0;
-	M[2] = 0;
-	M[3] = 0;
-
-	M[4] = 0;
-	M[5] = 1;
-	M[6] = 0;
-	M[7] = 0;
-
-	M[8] = 0;
-	M[9] = 0;
-	M[10] = 1;
-	M[11] = 0;
-
-	M[12] = 0;
-	M[13] = 0;
-	M[14] = 0;
-	M[15] = 1;
-}
-
-void mat4_mul(mat4* dst, mat4* a, mat4* b) {
-	float* M = dst->m;
-	float* A = a->m;
-	float* B = b->m;
-
-	M[0] = A[0] * B[0] + A[1] * B[4] + A[2] * B[8] + A[3] * B[12];
-	M[1] = A[0] * B[1] + A[1] * B[5] + A[2] * B[9] + A[3] * B[13];
-	M[2] = A[0] * B[2] + A[1] * B[6] + A[2] * B[10] + A[3] * B[14];
-	M[3] = A[0] * B[3] + A[1] * B[7] + A[2] * B[11] + A[3] * B[15];
-
-	M[4] = A[4] * B[0] + A[5] * B[4] + A[6] * B[8] + A[7] * B[12];
-	M[5] = A[4] * B[1] + A[5] * B[5] + A[6] * B[9] + A[7] * B[13];
-	M[6] = A[4] * B[2] + A[5] * B[6] + A[6] * B[10] + A[7] * B[14];
-	M[7] = A[4] * B[3] + A[5] * B[7] + A[6] * B[11] + A[7] * B[15];
-
-	M[8] =  A[8] * B[0] + A[9] * B[4] + A[10] * B[8] + A[11] * B[12];
-	M[9] =  A[8] * B[1] + A[9] * B[5] + A[10] * B[9] + A[11] * B[13];
-	M[10] = A[8] * B[2] + A[9] * B[6] + A[10] * B[10] + A[11] * B[14];
-	M[11] = A[8] * B[3] + A[9] * B[7] + A[10] * B[11] + A[11] * B[15];
-
-	M[12] = A[12] * B[0] + A[13] * B[4] + A[14] * B[8] + A[15] * B[12];
-	M[13] = A[12] * B[1] + A[13] * B[5] + A[14] * B[9] + A[15] * B[13];
-	M[14] = A[12] * B[2] + A[13] * B[6] + A[14] * B[10] + A[15] * B[14];
-	M[15] = A[12] * B[3] + A[13] * B[7] + A[14] * B[11] + A[15] * B[15];
-}
-
-void mat4_scale(mat4* m, vec3 s) {
-	float* M = m->m;
-
-	M[0] *= s.x;
-	M[4] *= s.x;
-	M[8] *= s.x;
-
-	M[1] *= s.y;
-	M[5] *= s.y;
-	M[9] *= s.y;
-
-	M[2] *= s.z;
-	M[6] *= s.z;
-	M[10] *= s.z;
-}
-
-void mat4_translate(mat4* m, vec3 t) {
-	float* M = m->m;
-
-	M[3] += M[0] * t.x + M[1] * t.y + M[2] * t.z;
-	M[7] += M[4] * t.x + M[5] * t.y + M[6] * t.z;
-	M[11] += M[8] * t.x + M[9] * t.y + M[10] * t.z;
-	M[15] += M[12] * t.x + M[13] * t.y + M[14] * t.z;
-}
-
-void mat4_rotatex(mat4* m, float t) {
-	float ct = cosf(t);
-	float st = sinf(t);
-
-	float* M = m->m;
-
-	mat4 m2 = {
-		M[0],
-		M[1] * ct + M[2] * st,
-		M[1] * -st + M[2] * ct,
-		M[3],
-		
-		M[4],
-		M[5] * ct + M[6] * st,
-		M[5] * -st + M[6] * ct,
-		M[7],
-
-		M[8],
-		M[9] * ct + M[10] * st,
-		M[9] * -st + M[10] * ct,
-		M[11],
-
-		M[12],
-		M[13] * ct + M[14] * st,
-		M[13] * -st + M[14] * ct,
-		M[15],
-	};
-
-	memcpy(M, m2.m, sizeof(mat4));
-}
-
-void mat4_rotatey(mat4* m, float t) {
-	float ct = cosf(t);
-	float st = sinf(t);
-
-	float* M = m->m;
-
-	mat4 m2 = {
-		M[0] * ct + M[2] * -st,
-		M[1],
-		M[0] * st + M[2] * ct,
-		M[3],
-
-		M[4] * ct + M[6] * -st,
-		M[5],
-		M[4] * st + M[6] * ct,
-		M[7],
-
-		M[8] * ct + M[10] * -st,
-		M[9],
-		M[8] * st + M[10] * ct,
-		M[11],
-
-		M[12] * ct + M[14] * -st,
-		M[13],
-		M[12] * st + M[14] * ct,
-		M[15],
-	};
-
-	memcpy(M, m2.m, sizeof(mat4));
-}
-
-void mat4_rotatez(mat4* m, float t) {
-	float ct = cosf(t);
-	float st = sinf(t);
-
-	float* M = m->m;
-
-	mat4 m2 = {
-		M[0] * ct + M[1] * -st,
-		M[0] * st + M[1] * ct,
-		M[2],
-		M[3],
-
-		M[4] * ct + M[5] * -st,
-		M[4] * st + M[5] * ct,
-		M[6],
-		M[7],
-
-		M[8] * ct + M[9] * -st,
-		M[8] * st + M[9] * ct,
-		M[10],
-		M[11],
-
-		M[12] * ct + M[13] * -st,
-		M[12] * st + M[13] * ct,
-		M[14],
-		M[15],
-	};
-
-	memcpy(M, m2.m, sizeof(mat4));
-}
-
-void mat4_ypr(float yaw, float pitch, float roll);
-
-void mat4_lookat(mat4* m, vec3 pos, vec3 target, vec3 up) {
-	vec3 zaxis = vec3_normalize(vec3_sub(target, pos));
-	vec3 xaxis = vec3_normalize(vec3_cross(up, zaxis));
-	vec3 yaxis = vec3_cross(zaxis, xaxis);
-
-	// mat4 lam = {
-	// 	xaxis.x, yaxis.x, zaxis.x, 0,
-	// 	xaxis.y, yaxis.y, zaxis.y, 0,
-	// 	xaxis.z, yaxis.z, zaxis.z, 0,
-	// 	-vec3_dot(xaxis, pos), -vec3_dot(yaxis, pos), -vec3_dot(zaxis, pos), 1
-	// };
-	mat4 lam = {
-		xaxis.x, xaxis.y, xaxis.z, -vec3_dot(xaxis, pos),
-		yaxis.x, yaxis.y, yaxis.z, -vec3_dot(yaxis, pos),
-		zaxis.x, zaxis.y, zaxis.z, -vec3_dot(zaxis, pos),
-		0, 0, 0, 1
-	};
-
-	mat4_mul(m, m, &lam);
-}
-
-void mat4_frustum(mat4* m, float l, float r, float b, float t, float n, float f);
-
-void mat4_perspective(mat4* m, float fovy, float aspect, float n, float f) {
-	float F = 1 / tanf(fovy / 2.);
-
-	float* M = m->m;
-
-	M[0] = F / aspect;
-	M[1] = 0;
-	M[2] = 0;
-	M[3] = 0;
-
-	M[4] = 0;
-	M[5] = F;
-	M[6] = 0;
-	M[7] = 0;
-
-	M[8] = 0;
-	M[9] = 0;
-	M[10] = (f + n) / (n - f);
-	M[11] = 2 * f * n / (n - f);
-	
-	M[12] = 0;
-	M[13] = 0;
-	M[14] = -1;
-	M[15] = 0;
-}
-
-void mat4_ortho(mat4* m, float l, float r, float b, float t, float n, float f) {
-	float* M = m->m;
-
-	M[0] = 2 / (r - l);
-	M[1] = 0;
-	M[2] = 0;
-	M[3] = -(r + l) / (r - l);
-
-	M[4] = 0;
-	M[5] = 2 / (t - b);
-	M[6] = 0;
-	M[7] = -(t + b) / (t - b);
-
-	M[8] = 0;
-	M[9] = 0;
-	M[10] = -2 / (f - n);
-	M[11] = -(f + n) / (f - n);
-
-	M[12] = 0;
-	M[13] = 0;
-	M[14] = 0;
-	M[15] = 1;
-}
-
-void mat4_print(mat4* m) {
-	float* M = m->m;
-	printf("%f %f %f %f\n%f %f %f %f\n%f %f %f %f\n%f %f %f %f\n",
-		M[0], M[1], M[2], M[3],
-		M[4], M[5], M[6], M[7],
-		M[8], M[9], M[10], M[11],
-		M[12], M[13], M[14], M[15]);
 }
 
 SDL_Window* window;
@@ -574,21 +244,21 @@ Model* Model_load(const char* path) {
 		if (line[0] == 'v') {
 			if (line[1] == 't') {
 				vec2 texcoord;
-				sscanf(line, "vt %f %f", &texcoord.x, &texcoord.y);
+				sscanf(line, "vt %f %f", &texcoord[0], &texcoord[1]);
 
-				Vector_add(texcoords, &texcoord);
+				Vector_add(texcoords, texcoord);
 			}
 			else if (line[1] == 'n') {
 				vec3 normal;
-				sscanf(line, "vn %f %f %f", &normal.x, &normal.y, &normal.z);
+				sscanf(line, "vn %f %f %f", &normal[0], &normal[1], &normal[2]);
 				
-				Vector_add(normals, &normal);
+				Vector_add(normals, normal);
 			}
 			else {
 				vec3 pos;
-				sscanf(line, "v %f %f %f", &pos.x, &pos.y, &pos.z);
+				sscanf(line, "v %f %f %f", &pos[0], &pos[1], &pos[2]);
 				
-				Vector_add(vertices, &pos);
+				Vector_add(vertices, pos);
 			}
 		}
 		else if (line[0] == 'm') {
@@ -647,21 +317,37 @@ Model* Model_load(const char* path) {
 				&v2, &t2, &n2,
 				&v3, &t3, &n3);
 
-			ModelVertex mv1 = {
-				((vec3*)vertices->data)[v1 - 1],
-				((vec2*)texcoords->data)[t1 - 1],
-				((vec3*)normals->data)[n1 - 1],
-			};
-			ModelVertex mv2 = {
-				((vec3*)vertices->data)[v2 - 1],
-				((vec2*)texcoords->data)[t2 - 1],
-				((vec3*)normals->data)[n2 - 1],
-			};
-			ModelVertex mv3 = {
-				((vec3*)vertices->data)[v3 - 1],
-				((vec2*)texcoords->data)[t3 - 1],
-				((vec3*)normals->data)[n3 - 1],
-			};
+			ModelVertex mv1;
+			ModelVertex mv2;
+			ModelVertex mv3;
+
+			memcpy(mv1.pos, ((vec3*)vertices->data)[v1 - 1], sizeof(vec3));
+			memcpy(mv1.uv, ((vec2*)texcoords->data)[t1 - 1], sizeof(vec2));
+			memcpy(mv1.normal, ((vec3*)normals->data)[n1 - 1], sizeof(vec3));
+
+			memcpy(mv2.pos, ((vec3*)vertices->data)[v2 - 1], sizeof(vec3));
+			memcpy(mv2.uv, ((vec2*)texcoords->data)[t2 - 1], sizeof(vec2));
+			memcpy(mv2.normal, ((vec3*)normals->data)[n2 - 1], sizeof(vec3));
+
+			memcpy(mv3.pos, ((vec3*)vertices->data)[v3 - 1], sizeof(vec3));
+			memcpy(mv3.uv, ((vec2*)texcoords->data)[t3 - 1], sizeof(vec2));
+			memcpy(mv3.normal, ((vec3*)normals->data)[n3 - 1], sizeof(vec3));
+
+			// ModelVertex mv1 = {
+			// 	((vec3*)vertices->data)[v1 - 1],
+			// 	((vec2*)texcoords->data)[t1 - 1],
+			// 	((vec3*)normals->data)[n1 - 1],
+			// };
+			// ModelVertex mv2 = {
+			// 	((vec3*)vertices->data)[v2 - 1],
+			// 	((vec2*)texcoords->data)[t2 - 1],
+			// 	((vec3*)normals->data)[n2 - 1],
+			// };
+			// ModelVertex mv3 = {
+			// 	((vec3*)vertices->data)[v3 - 1],
+			// 	((vec2*)texcoords->data)[t3 - 1],
+			// 	((vec3*)normals->data)[n3 - 1],
+			// };
 
 			Vector_add(modelVertices, &mv1);
 			Vector_add(modelVertices, &mv2);
@@ -726,12 +412,11 @@ int main(int argc, char** argv) {
 	glEnable(GL_CULL_FACE);
 	glEnable(GL_DEPTH_TEST);
 
-	glCullFace(GL_FRONT);
-
 	Model* model = Model_load("data/models/blahaj.obj");
 
 	GLuint prog = loadShaderProg("data/shaders/shader.vs", "data/shaders/shader.fs");
 	GLuint mat_loc = glGetUniformLocation(prog, "u_mat");
+	GLuint view_loc = glGetUniformLocation(prog, "u_view");
 	GLuint tex_loc = glGetUniformLocation(prog, "u_tex");
 
 	while (running) {
@@ -752,21 +437,25 @@ int main(int argc, char** argv) {
 		glUseProgram(prog);
 		glBindVertexArray(model->vao);
 
-		mat4 mat;
-		mat4_identity(&mat);
-		mat4_perspective(&mat, deg2rad(90), width / (float)height, 0, 100);
-		// mat4_lookat(&mat, (vec3){5, 5, 5}, (vec3){0, 0, 0}, (vec3){0, 1, 0});
+		mat4 proj;
+		glm_perspective(deg2rad(90), width / (float)height, 0.1f, 10, proj);
+		
+		vec3 eye = {3, sinf(frameNo / 60.0f * 5) * 3, 3};
+		vec3 center = {0, 0, 0};
+		vec3 up = {0, 1, 0};
+		mat4 view;
+		glm_lookat(eye, center, up, view);
 
-		// mat4_translate(&mat, (vec3){0, 0, -2 + sinf(3 * frameNo / 60.0f)});
-		// mat4_rotatey(&mat, 1);
-		// mat4_rotatex(&mat, sinf(frameNo / 60.0 * 2) / 2);
-		// mat4_translate(&mat, (vec3){0, 0, -2});
+		mat4 modelMat;
+		glm_mat4_identity(modelMat);
+		glm_rotate_y(modelMat, frameNo / 60.0f * deg2rad(60), modelMat);
 
-		mat4_rotatey(&mat, frameNo / 60.0f * deg2rad(60));
-		mat4_rotatex(&mat, frameNo / 60.0f * deg2rad(60));
-		mat4_scale(&mat, (vec3){0.5f, 0.5f, 0.5f});
+		mat4 mvp;
+		glm_mat4_mul(proj, view, mvp);
+		glm_mat4_mul(mvp, modelMat, mvp);
 
-		glUniformMatrix4fv(mat_loc, 1, GL_TRUE, mat.m);
+		glUniformMatrix4fv(mat_loc, 1, GL_FALSE, (float*)mvp);
+		glUniformMatrix4fv(view_loc, 1, GL_FALSE, (float*)view);
 
 		glDrawArrays(GL_TRIANGLES, 0, model->vertexCount);
 
