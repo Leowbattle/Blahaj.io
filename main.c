@@ -190,6 +190,7 @@ void mat4_translate(mat4* m, vec3 t) {
 	M[3] += M[0] * t.x + M[1] * t.y + M[2] * t.z;
 	M[7] += M[4] * t.x + M[5] * t.y + M[6] * t.z;
 	M[11] += M[8] * t.x + M[9] * t.y + M[10] * t.z;
+	M[15] += M[12] * t.x + M[13] * t.y + M[14] * t.z;
 }
 
 void mat4_rotatex(mat4* m, float t) {
@@ -288,7 +289,32 @@ void mat4_rotatez(mat4* m, float t) {
 void mat4_ypr(float yaw, float pitch, float roll);
 void mat4_lookat(mat4* m, vec3 pos, vec3 target, vec3 up);
 void mat4_frustum(mat4* m, float l, float r, float b, float t, float n, float f);
-void mat4_perspective(mat4* m, float fovy, float aspect, float n, float f);
+
+void mat4_perspective(mat4* m, float fovy, float aspect, float n, float f) {
+	float F = 1 / tanf(fovy / 2.);
+
+	float* M = m->m;
+
+	M[0] = F / aspect;
+	M[1] = 0;
+	M[2] = 0;
+	M[3] = 0;
+
+	M[4] = 0;
+	M[5] = F;
+	M[6] = 0;
+	M[7] = 0;
+
+	M[8] = 0;
+	M[9] = 0;
+	M[10] = -(f + n) / (n - f);
+	M[11] = -2 * f * n / (n - f);
+	
+	M[12] = 0;
+	M[13] = 0;
+	M[14] = 1;
+	M[15] = 0;
+}
 
 void mat4_ortho(mat4* m, float l, float r, float b, float t, float n, float f) {
 	float* M = m->m;
@@ -528,12 +554,14 @@ int main(int argc, char** argv) {
 		glBindVertexArray(vao);
 
 		mat4 mat;
-		mat4_ortho(&mat, 0, width, 0, height, -1, 1);
-		mat4_scale(&mat, (vec3){100, 100, 1});
+		mat4_perspective(&mat, deg2rad(90), width / (float)height, 0, 100);
+		mat4_translate(&mat, (vec3){0, 0, 2});
+
 		mat4_translate(&mat, (vec3){0.5f, 0.5f, 0});
-		mat4_rotatey(&mat, frameNo / 60.0f * deg2rad(30));
+		mat4_rotatex(&mat, frameNo / 60.0f * deg2rad(30));
 		mat4_rotatez(&mat, frameNo / 60.0f * deg2rad(60));
 		mat4_translate(&mat, (vec3){-0.5f, -0.5f, 0});
+		
 		glUniformMatrix4fv(mat_loc, 1, GL_TRUE, mat.m);
 
 		glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, NULL);
