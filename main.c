@@ -850,7 +850,7 @@ void Fishs_init() {
 		float ct = cosf((float)i / n * 2 * PI);
 		float st = sinf((float)i / n * 2 * PI);
 		float r = 10;
-
+ 
 		Fish fish;
 		fish.pos[0] = r * ct;
 		fish.pos[1] = 0;
