@@ -55,6 +55,13 @@ int width = 1280;
 int height = 720;
 
 int frameNo = 0;
+float globalTime = 0;
+float dt = 1 / 60.0f;
+
+mat4 projMat;
+mat4 viewMat;
+
+GLuint texturedShader;
 
 void panic(const char* format, ...) {
 	fprintf(stderr, "Panic: ");
@@ -333,22 +340,6 @@ Model* Model_load(const char* path) {
 			memcpy(mv3.uv, ((vec2*)texcoords->data)[t3 - 1], sizeof(vec2));
 			memcpy(mv3.normal, ((vec3*)normals->data)[n3 - 1], sizeof(vec3));
 
-			// ModelVertex mv1 = {
-			// 	((vec3*)vertices->data)[v1 - 1],
-			// 	((vec2*)texcoords->data)[t1 - 1],
-			// 	((vec3*)normals->data)[n1 - 1],
-			// };
-			// ModelVertex mv2 = {
-			// 	((vec3*)vertices->data)[v2 - 1],
-			// 	((vec2*)texcoords->data)[t2 - 1],
-			// 	((vec3*)normals->data)[n2 - 1],
-			// };
-			// ModelVertex mv3 = {
-			// 	((vec3*)vertices->data)[v3 - 1],
-			// 	((vec2*)texcoords->data)[t3 - 1],
-			// 	((vec3*)normals->data)[n3 - 1],
-			// };
-
 			Vector_add(modelVertices, &mv1);
 			Vector_add(modelVertices, &mv2);
 			Vector_add(modelVertices, &mv3);
@@ -385,6 +376,33 @@ Model* Model_load(const char* path) {
 	return model;
 }
 
+GLuint mat_loc;
+GLuint view_loc;
+GLuint tex_loc;
+
+struct {
+	vec3 pos;
+	Model* model;
+} Blahaj;
+
+void Blahaj_update() {
+	glUseProgram(texturedShader);
+	glBindVertexArray(Blahaj.model->vao);
+
+	mat4 modelMat;
+	glm_mat4_identity(modelMat);
+	glm_rotate_y(modelMat, frameNo / 60.0f * deg2rad(60), modelMat);
+
+	mat4 mvp;
+	glm_mat4_mul(projMat, viewMat, mvp);
+	glm_mat4_mul(mvp, modelMat, mvp);
+
+	glUniformMatrix4fv(mat_loc, 1, GL_FALSE, (float*)mvp);
+	glUniformMatrix4fv(view_loc, 1, GL_FALSE, (float*)viewMat);
+
+	glDrawArrays(GL_TRIANGLES, 0, Blahaj.model->vertexCount);
+}
+
 void sigsegv_func(int signo) {
 	panic("Segmentation fault\n");
 }
@@ -412,12 +430,12 @@ int main(int argc, char** argv) {
 	glEnable(GL_CULL_FACE);
 	glEnable(GL_DEPTH_TEST);
 
-	Model* model = Model_load("data/models/blahaj.obj");
+	Blahaj.model = Model_load("data/models/blahaj.obj");
 
-	GLuint prog = loadShaderProg("data/shaders/shader.vs", "data/shaders/shader.fs");
-	GLuint mat_loc = glGetUniformLocation(prog, "u_mat");
-	GLuint view_loc = glGetUniformLocation(prog, "u_view");
-	GLuint tex_loc = glGetUniformLocation(prog, "u_tex");
+	texturedShader = loadShaderProg("data/shaders/shader.vs", "data/shaders/shader.fs");
+	mat_loc = glGetUniformLocation(texturedShader, "u_mat");
+	view_loc = glGetUniformLocation(texturedShader, "u_view");
+	tex_loc = glGetUniformLocation(texturedShader, "u_tex");
 
 	while (running) {
 		SDL_Event e;
@@ -434,34 +452,19 @@ int main(int argc, char** argv) {
 		glClearColor(0, 0, 0, 1);
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-		glUseProgram(prog);
-		glBindVertexArray(model->vao);
-
-		mat4 proj;
-		glm_perspective(deg2rad(90), width / (float)height, 0.1f, 10, proj);
+		glm_perspective(deg2rad(90), width / (float)height, 0.1f, 10, projMat);
 		
-		vec3 eye = {3, sinf(frameNo / 60.0f * 5) * 3, 3};
+		vec3 eye = {3, 3, 3};
 		vec3 center = {0, 0, 0};
 		vec3 up = {0, 1, 0};
-		mat4 view;
-		glm_lookat(eye, center, up, view);
+		glm_lookat(eye, center, up, viewMat);
 
-		mat4 modelMat;
-		glm_mat4_identity(modelMat);
-		glm_rotate_y(modelMat, frameNo / 60.0f * deg2rad(60), modelMat);
-
-		mat4 mvp;
-		glm_mat4_mul(proj, view, mvp);
-		glm_mat4_mul(mvp, modelMat, mvp);
-
-		glUniformMatrix4fv(mat_loc, 1, GL_FALSE, (float*)mvp);
-		glUniformMatrix4fv(view_loc, 1, GL_FALSE, (float*)view);
-
-		glDrawArrays(GL_TRIANGLES, 0, model->vertexCount);
+		Blahaj_update();
 
 		SDL_GL_SwapWindow(window);
 
 		frameNo++;
+		globalTime = frameNo * dt;
 	}
 
 	return 0;
