@@ -11,8 +11,9 @@
 
 #include <glad/glad.h>
 #include <SDL2/SDL.h>
-#include <SDL2/SDL_image.h>
-#include <SDL2/SDL_ttf.h>
+
+#define STB_IMAGE_IMPLEMENTATION
+#include "stb_image.h"
 
 #define PI 3.1415926
 
@@ -42,6 +43,11 @@ float clampf(float x, float a, float b) {
 float lerpf(float a, float b, float t) {
 	return a + (b - a) * t;
 }
+
+typedef struct vec2 {
+	float x;
+	float y;
+} vec2;
 
 typedef struct vec3 {
 	float x;
@@ -287,7 +293,28 @@ void mat4_rotatez(mat4* m, float t) {
 }
 
 void mat4_ypr(float yaw, float pitch, float roll);
-void mat4_lookat(mat4* m, vec3 pos, vec3 target, vec3 up);
+
+// void mat4_lookat(mat4* m, vec3 pos, vec3 target, vec3 up) {
+// 	vec3 zaxis = vec3_normalize(vec3_sub(target, pos));
+// 	vec3 xaxis = vec3_normalize(vec3_cross(up, zaxis));
+// 	vec3 yaxis = vec3_cross(zaxis, xaxis);
+
+// 	// mat4 lam = {
+// 	// 	xaxis.x, yaxis.x, zaxis.x, 0,
+// 	// 	xaxis.y, yaxis.y, zaxis.y, 0,
+// 	// 	xaxis.z, yaxis.z, zaxis.z, 0,
+// 	// 	-vec3_dot(xaxis, pos), -vec3_dot(yaxis, pos), -vec3_dot(zaxis, pos), 1
+// 	// };
+// 	mat4 lam = {
+// 		xaxis.x, xaxis.y, xaxis.z, -vec3_dot(xaxis, pos),
+// 		yaxis.x, yaxis.y, yaxis.z, -vec3_dot(yaxis, pos),
+// 		zaxis.x, zaxis.y, zaxis.z, -vec3_dot(zaxis, pos),
+// 		0, 0, 0, 1
+// 	};
+
+// 	mat4_mul(m, m, &lam);
+// }
+
 void mat4_frustum(mat4* m, float l, float r, float b, float t, float n, float f);
 
 void mat4_perspective(mat4* m, float fovy, float aspect, float n, float f) {
@@ -307,12 +334,12 @@ void mat4_perspective(mat4* m, float fovy, float aspect, float n, float f) {
 
 	M[8] = 0;
 	M[9] = 0;
-	M[10] = -(f + n) / (n - f);
-	M[11] = -2 * f * n / (n - f);
+	M[10] = (f + n) / (n - f);
+	M[11] = 2 * f * n / (n - f);
 	
 	M[12] = 0;
 	M[13] = 0;
-	M[14] = 1;
+	M[14] = -1;
 	M[15] = 0;
 }
 
@@ -402,6 +429,45 @@ void xfree(void* ptr) {
 	free(ptr);
 }
 
+typedef struct Vector Vector;
+
+struct Vector {
+	void* data;
+	size_t capacity;
+	size_t count;
+	size_t size;
+};
+
+Vector* Vector_new(size_t size) {
+	Vector* vec = xmalloc(sizeof(Vector));
+	vec->data = NULL;
+	vec->capacity = 0;
+	vec->count = 0;
+	vec->size = size;
+	return vec;
+}
+
+void Vector_delete(Vector* vec) {
+	if (vec->data != NULL) {
+		xfree(vec->data);
+	}
+	xfree(vec);
+}
+
+void Vector_add(Vector* vec, void* item) {
+	if (vec->data == NULL) {
+		vec->capacity = 4;
+		vec->data = xmalloc(vec->capacity * vec->size);
+	}
+
+	if (vec->count == vec->capacity) {
+		vec->capacity *= 2;
+		vec->data = xrealloc(vec->data, vec->capacity * vec->size);
+	}
+
+	memcpy((uint8_t*)(vec->data) + vec->count++ * vec->size, item, vec->size);
+}
+
 char* read_file(const char* path) {
 	FILE* file = fopen(path, "r");
 	if (file == NULL) {
@@ -477,6 +543,162 @@ GLuint loadShaderProg(const char* vs_path, const char* fs_path) {
 	return prog;
 }
 
+typedef struct Model {
+	GLuint vao;
+	GLuint vbo;
+	GLuint texture;
+	int vertexCount;
+} Model;
+
+typedef struct ModelVertex {
+	vec3 pos;
+	vec2 uv;
+	vec3 normal;
+} ModelVertex;
+
+Model* Model_load(const char* path) {
+	FILE* file = fopen(path, "r");
+	if (file == NULL) {
+		panic("Unable to open file %s\n", path);
+	}
+
+	Vector* vertices = Vector_new(sizeof(vec3));
+	Vector* texcoords = Vector_new(sizeof(vec2));
+	Vector* normals = Vector_new(sizeof(vec3));
+	Vector* modelVertices = Vector_new(sizeof(ModelVertex));
+
+	int texture;
+
+	char line[256];
+	while (fgets(line, sizeof(line), file) != NULL) {
+		if (line[0] == 'v') {
+			if (line[1] == 't') {
+				vec2 texcoord;
+				sscanf(line, "vt %f %f", &texcoord.x, &texcoord.y);
+
+				Vector_add(texcoords, &texcoord);
+			}
+			else if (line[1] == 'n') {
+				vec3 normal;
+				sscanf(line, "vn %f %f %f", &normal.x, &normal.y, &normal.z);
+				
+				Vector_add(normals, &normal);
+			}
+			else {
+				vec3 pos;
+				sscanf(line, "v %f %f %f", &pos.x, &pos.y, &pos.z);
+				
+				Vector_add(vertices, &pos);
+			}
+		}
+		else if (line[0] == 'm') {
+			char filename[256];
+			sscanf(line, "mtllib %s", filename);
+
+			FILE* mtlFile = fopen(filename, "r");
+			if (mtlFile == NULL) {
+				panic("Unable to open file %s\n", path);
+			}
+
+			char line2[256];
+			while (fgets(line2, sizeof(line2), mtlFile)) {
+				if (line2[0] == 'm') {
+					char imgName[256];
+					sscanf(line2, "map_Kd %s", imgName);
+
+					int texW;
+					int texH;
+					int comp;
+
+					stbi_set_flip_vertically_on_load(1);
+					void* pixelData = stbi_load(imgName, &texW, &texH, &comp, 3);
+
+					glActiveTexture(GL_TEXTURE0);
+					glGenTextures(1, &texture);
+					glBindTexture(GL_TEXTURE_2D, texture);
+
+					glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_MIRRORED_REPEAT);
+					glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_MIRRORED_REPEAT);
+
+					glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+					glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+					glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, texW, texH, 0, GL_RGB, GL_UNSIGNED_BYTE, pixelData);
+				
+					stbi_image_free(pixelData);
+				}
+			}
+
+			fclose(mtlFile);
+		}
+		else if (line[0] == 'f') {
+			int v1;
+			int v2;
+			int v3;
+			int t1;
+			int t2;
+			int t3;
+			int n1;
+			int n2;
+			int n3;
+
+			sscanf(line, "f %d/%d/%d %d/%d/%d %d/%d/%d",
+				&v1, &t1, &n1,
+				&v2, &t2, &n2,
+				&v3, &t3, &n3);
+
+			ModelVertex mv1 = {
+				((vec3*)vertices->data)[v1 - 1],
+				((vec2*)texcoords->data)[t1 - 1],
+				((vec3*)normals->data)[n1 - 1],
+			};
+			ModelVertex mv2 = {
+				((vec3*)vertices->data)[v2 - 1],
+				((vec2*)texcoords->data)[t2 - 1],
+				((vec3*)normals->data)[n2 - 1],
+			};
+			ModelVertex mv3 = {
+				((vec3*)vertices->data)[v3 - 1],
+				((vec2*)texcoords->data)[t3 - 1],
+				((vec3*)normals->data)[n3 - 1],
+			};
+
+			Vector_add(modelVertices, &mv1);
+			Vector_add(modelVertices, &mv2);
+			Vector_add(modelVertices, &mv3);
+		}
+	}
+
+	fclose(file);
+
+	Model* model = xmalloc(sizeof(Model));
+	model->vertexCount = modelVertices->count;
+	model->texture = texture;
+
+	glGenVertexArrays(1, &model->vao);
+	glBindVertexArray(model->vao);
+
+	glGenBuffers(1, &model->vbo);
+	glBindBuffer(GL_ARRAY_BUFFER, model->vbo);
+	glBufferData(GL_ARRAY_BUFFER, modelVertices->count * sizeof(ModelVertex), modelVertices->data, GL_STATIC_DRAW);
+
+	glEnableVertexAttribArray(0);
+	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(ModelVertex), 0);
+
+	glEnableVertexAttribArray(1);
+	glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, sizeof(ModelVertex), (void*)(3 * sizeof(float)));
+
+	glEnableVertexAttribArray(2);
+	glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, sizeof(ModelVertex), (void*)(5 * sizeof(float)));
+
+	Vector_delete(vertices);
+	Vector_delete(texcoords);
+	Vector_delete(normals);
+	Vector_delete(modelVertices);
+
+	return model;
+}
+
 void sigsegv_func(int signo) {
 	panic("Segmentation fault\n");
 }
@@ -501,39 +723,16 @@ int main(int argc, char** argv) {
 
 	SDL_GL_SetSwapInterval(1);
 
+	glEnable(GL_CULL_FACE);
+	glEnable(GL_DEPTH_TEST);
+
+	glCullFace(GL_FRONT);
+
+	Model* model = Model_load("data/models/blahaj.obj");
+
 	GLuint prog = loadShaderProg("data/shaders/shader.vs", "data/shaders/shader.fs");
 	GLuint mat_loc = glGetUniformLocation(prog, "u_mat");
-
-	GLuint vao;
-	glGenVertexArrays(1, &vao);
-	glBindVertexArray(vao);
-
-	GLuint vbo;
-	glGenBuffers(1, &vbo);
-	glBindBuffer(GL_ARRAY_BUFFER, vbo);
-
-	float data[] = {
-		0, 0, 0, 1, 0, 0,
-		1, 0, 0, 0, 1, 0,
-		0, 1, 0, 0, 0, 1,
-		1, 1, 0, 1, 1, 0,
-	};
-	glBufferData(GL_ARRAY_BUFFER, sizeof(data), data, GL_STATIC_DRAW);
-
-	glEnableVertexAttribArray(0);
-	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), 0);
-
-	glEnableVertexAttribArray(1);
-	glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(3 * sizeof(float)));
-
-	GLuint ebo;
-	glGenBuffers(1, &ebo);
-	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo);
-	unsigned int indices[] = {
-		0, 1, 2,
-		1, 2, 3,
-	};
-	glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
+	GLuint tex_loc = glGetUniformLocation(prog, "u_tex");
 
 	while (running) {
 		SDL_Event e;
@@ -548,23 +747,25 @@ int main(int argc, char** argv) {
 		}
 
 		glClearColor(0, 0, 0, 1);
-		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
+		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 		glUseProgram(prog);
-		glBindVertexArray(vao);
+		glBindVertexArray(model->vao);
 
 		mat4 mat;
-		mat4_perspective(&mat, deg2rad(90), width / (float)height, 0, 100);
-		mat4_translate(&mat, (vec3){0, 0, 2});
+		mat4_identity(&mat);
+		// mat4_perspective(&mat, deg2rad(90), width / (float)height, 0, 100);
 
-		mat4_translate(&mat, (vec3){0.5f, 0.5f, 0});
-		mat4_rotatex(&mat, frameNo / 60.0f * deg2rad(30));
-		mat4_rotatez(&mat, frameNo / 60.0f * deg2rad(60));
-		mat4_translate(&mat, (vec3){-0.5f, -0.5f, 0});
-		
+		// mat4_translate(&mat, (vec3){0, 0, 5});
+		// mat4_rotatex(&mat, deg2rad(90));
+
+		mat4_rotatey(&mat, frameNo / 60.0f * deg2rad(120));
+		mat4_rotatex(&mat, frameNo / 60.0f * deg2rad(60));
+		mat4_scale(&mat, (vec3){0.5f, 0.5f, 0.5f});
+
 		glUniformMatrix4fv(mat_loc, 1, GL_TRUE, mat.m);
 
-		glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, NULL);
+		glDrawArrays(GL_TRIANGLES, 0, model->vertexCount);
 
 		SDL_GL_SwapWindow(window);
 
