@@ -5,6 +5,7 @@
 #include <stdbool.h>
 #include <assert.h>
 #include <math.h>
+#include <time.h>
 
 #include <signal.h>
 #include <execinfo.h>
@@ -20,6 +21,13 @@
 #define NANOVG_GL3_IMPLEMENTATION
 #include <nanovg.h>
 #include <nanovg_gl.h>
+
+// https://stackoverflow.com/questions/13408990/how-to-generate-random-float-number-in-c
+float float_rand( float min, float max )
+{
+    float scale = rand() / (float) RAND_MAX; /* [0, 1.0] */
+    return min + scale * ( max - min );      /* [min, max] */
+}
 
 #define PI 3.1415926
 
@@ -835,6 +843,7 @@ void Sky_update() {
 
 typedef struct Fish {
 	vec3 pos;
+	float yaw;
 } Fish;
 
 Vector* fishes;
@@ -850,25 +859,32 @@ void Fishs_init() {
 		float ct = cosf((float)i / n * 2 * PI);
 		float st = sinf((float)i / n * 2 * PI);
 		float r = 10;
- 
+
 		Fish fish;
 		fish.pos[0] = r * ct;
 		fish.pos[1] = 0;
 		fish.pos[2] = r * st;
+		fish.yaw = float_rand(0, 2 * PI);
 		Vector_add(fishes, &fish);
 	}
 }
 
 void Fishs_update() {
+	const float fishSpeed = 5;
+
 	glUseProgram(texturedShader);
 	glBindVertexArray(fishModel->vao);
 
 	for (int i = 0; i < fishes->count; i++) {
 		Fish* fish = &((Fish*)fishes->data)[i];
+
+		fish->pos[0] += fishSpeed * cosf(fish->yaw) * dt;
+		fish->pos[2] += fishSpeed * sinf(fish->yaw) * dt;
 	
 		mat4 modelMat;
 		glm_mat4_identity(modelMat);
 		glm_translate(modelMat, fish->pos);
+		glm_rotate_y(modelMat, PI-fish->yaw, modelMat);
 
 		mat4 mvp;
 		glm_mat4_mul(projMat, viewMat, mvp);
@@ -890,6 +906,8 @@ void sigsegv_func(int signo) {
 
 int main(int argc, char** argv) {
 	signal(SIGSEGV, sigsegv_func);
+
+	srand(time(NULL));
 
 	SDL_Init(SDL_INIT_EVERYTHING);
 
