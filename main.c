@@ -168,7 +168,22 @@ void mat4_mul(mat4* dst, mat4* a, mat4* b) {
 	M[15] = A[12] * B[3] + A[13] * B[7] + A[14] * B[11] + A[15] * B[15];
 }
 
-void mat4_scale(mat4* m, vec3 s);
+void mat4_scale(mat4* m, vec3 s) {
+	float* M = m->m;
+
+	M[0] *= s.x;
+	M[4] *= s.x;
+	M[8] *= s.x;
+
+	M[1] *= s.y;
+	M[5] *= s.y;
+	M[9] *= s.y;
+
+	M[2] *= s.z;
+	M[6] *= s.z;
+	M[10] *= s.z;
+}
+
 void mat4_translate(mat4* m, vec3 t);
 void mat4_rotatex(mat4* m, float t);
 void mat4_rotatey(mat4* m, float t);
@@ -330,16 +345,8 @@ int main(int argc, char** argv) {
 		13, 14, 15, 16
 	};
 
-	mat4 b = {
-		3, 5, 2, 7,
-		3, 5, 8, 7,
-		3, 5, 5, 7,
-		3, 1, 2, 7,
-	};
-
-	mat4 m;
-	mat4_mul(&m, &a, &b);
-	mat4_print(&m);
+	mat4_scale(&a, (vec3){5, 6, 7});
+	mat4_print(&a);
 
 	return 0;
 
