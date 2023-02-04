@@ -484,7 +484,7 @@ void Blahaj_update() {
 	
 	Blahaj.roll = lerpf(Blahaj.roll, Blahaj.rollTarget, 15 * dt);
 
-	vec3 v = {2, 2, 0};
+	vec3 v = {4, 2, 0};
 	glm_vec3_rotate(v, Blahaj.yaw, (vec3){0, 1, 0});
 	glm_vec3_add(v, Blahaj.pos, Blahaj.camTarget);
 
@@ -539,7 +539,7 @@ GLuint view_loc2;
 
 void Water_init() {
 	Water.sim_size = 500;
-	Water.c = 40;
+	Water.c = 400;
 	Water.size = 100;
 	Water.u = xmalloc(Water.sim_size * Water.sim_size * sizeof(float));
 	Water.dudt = xmalloc(Water.sim_size * Water.sim_size * sizeof(float));
@@ -628,8 +628,8 @@ void Water_step_sim() {
 			float dx = Water.size / Water.sim_size;
 
 			float dudx = Water.u[i * Water.sim_size + j - 1] - 2 * Water.u[i * Water.sim_size + j] + Water.u[i * Water.sim_size + j + 1];
-      		float dudy = Water.u[(i - 1) * Water.sim_size + j] - 2 * Water.u[i * Water.sim_size + j] + Water.u[(i + 1) * Water.sim_size + j];
-      		dudx /= dx * dx;
+	  		float dudy = Water.u[(i - 1) * Water.sim_size + j] - 2 * Water.u[i * Water.sim_size + j] + Water.u[(i + 1) * Water.sim_size + j];
+	  		dudx /= dx * dx;
 			dudy /= dx * dx;
 			Water.dudt[i * Water.sim_size + j] += (dudx + dudy) * c * c * dt;
 		}
@@ -699,6 +699,135 @@ void Water_update() {
 	glBindVertexArray(0);
 }
 
+struct {
+	GLuint shader;
+	GLuint vao;
+	GLuint vbo;
+	GLuint texture;
+} Sky;
+
+GLuint projLoc3;
+GLuint viewLoc3;
+
+// https://learnopengl.com/Advanced-OpenGL/Cubemaps
+unsigned int loadCubemap(const char** faces)
+{
+    unsigned int textureID;
+    glGenTextures(1, &textureID);
+    glBindTexture(GL_TEXTURE_CUBE_MAP, textureID);
+
+    int width, height, nrChannels;
+    for (unsigned int i = 0; i < 6; i++)
+    {
+        unsigned char *data = stbi_load(faces[i], &width, &height, &nrChannels, 0);
+        if (data)
+        {
+            glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, 
+                         0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, data
+            );
+            stbi_image_free(data);
+        }
+    }
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+
+    return textureID;
+}
+
+void Sky_init() {
+	Sky.shader = loadShaderProg("data/shaders/sky.vs", "data/shaders/sky.fs");
+	projLoc3 = glGetUniformLocation(Sky.shader, "projection");
+	viewLoc3 = glGetUniformLocation(Sky.shader, "view");
+
+	char* faces[6] = {
+		"data/sky/right.jpg",
+		"data/sky/left.jpg",
+		"data/sky/bottom.jpg",
+		"data/sky/top.jpg",
+		"data/sky/front.jpg",
+		"data/sky/back.jpg",
+	};
+	Sky.texture = loadCubemap((const char**)faces);
+
+	glGenVertexArrays(1, &Sky.vao);
+	glBindVertexArray(Sky.vao);
+
+	glGenBuffers(1, &Sky.vbo);
+	glBindBuffer(GL_ARRAY_BUFFER, Sky.vbo);
+
+	float skyboxVertices[] = {
+		// positions          
+		-1.0f,  1.0f, -1.0f,
+		-1.0f, -1.0f, -1.0f,
+		1.0f, -1.0f, -1.0f,
+		1.0f, -1.0f, -1.0f,
+		1.0f,  1.0f, -1.0f,
+		-1.0f,  1.0f, -1.0f,
+
+		-1.0f, -1.0f,  1.0f,
+		-1.0f, -1.0f, -1.0f,
+		-1.0f,  1.0f, -1.0f,
+		-1.0f,  1.0f, -1.0f,
+		-1.0f,  1.0f,  1.0f,
+		-1.0f, -1.0f,  1.0f,
+
+		1.0f, -1.0f, -1.0f,
+		1.0f, -1.0f,  1.0f,
+		1.0f,  1.0f,  1.0f,
+		1.0f,  1.0f,  1.0f,
+		1.0f,  1.0f, -1.0f,
+		1.0f, -1.0f, -1.0f,
+
+		-1.0f, -1.0f,  1.0f,
+		-1.0f,  1.0f,  1.0f,
+		1.0f,  1.0f,  1.0f,
+		1.0f,  1.0f,  1.0f,
+		1.0f, -1.0f,  1.0f,
+		-1.0f, -1.0f,  1.0f,
+
+		-1.0f,  1.0f, -1.0f,
+		1.0f,  1.0f, -1.0f,
+		1.0f,  1.0f,  1.0f,
+		1.0f,  1.0f,  1.0f,
+		-1.0f,  1.0f,  1.0f,
+		-1.0f,  1.0f, -1.0f,
+
+		-1.0f, -1.0f, -1.0f,
+		-1.0f, -1.0f,  1.0f,
+		1.0f, -1.0f, -1.0f,
+		1.0f, -1.0f, -1.0f,
+		-1.0f, -1.0f,  1.0f,
+		1.0f, -1.0f,  1.0f
+	};
+	glBufferData(GL_ARRAY_BUFFER, sizeof(skyboxVertices), skyboxVertices, GL_STATIC_DRAW);
+
+	glEnableVertexAttribArray(0);
+	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0);
+}
+
+void Sky_update() {
+	glBindVertexArray(Sky.vao);
+	glUseProgram(Sky.shader);
+
+	glDepthMask(GL_FALSE);
+
+	glUniformMatrix4fv(projLoc3, 1, GL_FALSE, (float*)projMat);
+
+	mat4 matmat;
+	glm_mat4_copy(viewMat, matmat);
+	matmat[3][0] = 0;
+	matmat[3][1] = 0;
+	matmat[3][2] = 0;
+	glUniformMatrix4fv(viewLoc3, 1, GL_FALSE, (float*)matmat);
+
+	glDrawArrays(GL_TRIANGLES, 0, 36);
+
+	glDepthMask(GL_TRUE);
+}
+
 void sigsegv_func(int signo) {
 	panic("Segmentation fault\n");
 }
@@ -728,6 +857,7 @@ int main(int argc, char** argv) {
 
 	Blahaj_init();
 	Water_init();
+	Sky_init();
 
 	texturedShader = loadShaderProg("data/shaders/shader.vs", "data/shaders/shader.fs");
 	mat_loc = glGetUniformLocation(texturedShader, "u_mat");
@@ -763,6 +893,7 @@ int main(int argc, char** argv) {
 		vec3 up = {0, 1, 0};
 		glm_lookat(Blahaj.camPos, Blahaj.pos, up, viewMat);
 
+		Sky_update();
 		Blahaj_update();
 		Water_update();
 
