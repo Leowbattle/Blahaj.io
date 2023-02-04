@@ -467,7 +467,7 @@ void Blahaj_update() {
 
 		Blahaj.speed = clampf(Blahaj.speed + acceleration * dt, 0, maxSpeed);
 
-		Water_add_pulse(1, 1, 0, 0);
+		Water_add_pulse(0.25f, 0.05f, Blahaj.pos[0], Blahaj.pos[2]);
 	}
 	if (keyboardState[SDL_SCANCODE_DOWN]) {
 		accelerating = true;
@@ -522,6 +522,7 @@ struct {
 	GLuint ebo;
 	GLuint vbo_xy;
 	GLuint vbo_u;
+	GLuint vbo_normal;
 
 	float* u;
 	float* dudt;
@@ -542,6 +543,7 @@ void Water_init() {
 	Water.size = 100;
 	Water.u = xmalloc(Water.sim_size * Water.sim_size * sizeof(float));
 	Water.dudt = xmalloc(Water.sim_size * Water.sim_size * sizeof(float));
+	Water.normals = xmalloc(Water.sim_size * Water.sim_size * sizeof(vec3));
 
 	glGenVertexArrays(1, &Water.vao);
 	glBindVertexArray(Water.vao);
@@ -590,6 +592,13 @@ void Water_init() {
 	glEnableVertexAttribArray(1);
 	glVertexAttribPointer(1, 1, GL_FLOAT, GL_FALSE, 0, 0);
 
+	glGenBuffers(1, &Water.vbo_normal);
+	glBindBuffer(GL_ARRAY_BUFFER, Water.vbo_normal);
+	glBufferData(GL_ARRAY_BUFFER, Water.sim_size * Water.sim_size * sizeof(vec3), NULL, GL_STREAM_DRAW);
+
+	glEnableVertexAttribArray(2);
+	glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, 0, 0);
+
 	Water.shader = loadShaderProg("data/shaders/water.vs", "data/shaders/water.fs");
 	mat_loc2 = glGetUniformLocation(Water.shader, "u_mat");
 	view_loc2 = glGetUniformLocation(Water.shader, "u_view");
@@ -600,6 +609,9 @@ void Water_add_pulse(float strength, float size, float cx, float cy) {
 		for (int j = 0; j < Water.sim_size; j++) {
 			float x = mapf(j, 0, Water.sim_size - 1, -Water.size / 2, Water.size / 2);
 			float y = mapf(i, 0, Water.sim_size - 1, -Water.size / 2, Water.size / 2);
+
+			x -= cx;
+			y -= cy;
 
 			float u = strength * expf(-(x * x + y * y) / size);
 
@@ -633,7 +645,35 @@ void Water_step_sim() {
 			Water.u[i * Water.sim_size + j] += Water.dudt[i * Water.sim_size + j] * dt;
 		}
 	}
+	glBindBuffer(GL_ARRAY_BUFFER, Water.vbo_u);
 	glBufferSubData(GL_ARRAY_BUFFER, 0, Water.sim_size * Water.sim_size * sizeof(float), Water.u);
+
+	for (int i = 1; i < Water.sim_size - 1; i++) {
+		for (int j = 1; j < Water.sim_size - 1; j++) {
+			float dx = Water.size / Water.sim_size;
+
+			float u1 = Water.u[i * Water.sim_size + j + 1] - Water.u[i * Water.sim_size + j];
+			float u2 = Water.u[(i + 1) * Water.sim_size + j] - Water.u[i * Water.sim_size + j];
+
+			// u1 /= (2 * dx);
+			// u2 /= (2 * dx);
+
+			vec3 vx = {0};
+			vec3 vy = {0};
+			
+			vx[1] = 1;
+			vx[0] = u1;
+			vy[0] = u2;
+			vy[2] = 1;
+
+			vec3 normal;
+			glm_vec3_cross(vx, vy, normal);
+			glm_vec3_normalize(normal);
+			glm_vec3_copy(normal, Water.normals[i * Water.sim_size + j]);
+		}
+	}
+	glBindBuffer(GL_ARRAY_BUFFER, Water.vbo_normal);
+	glBufferSubData(GL_ARRAY_BUFFER, 0, Water.sim_size * Water.sim_size * sizeof(vec3), Water.normals);
 }
 
 void Water_update() {
@@ -710,10 +750,12 @@ int main(int argc, char** argv) {
 
 		glEnable(GL_CULL_FACE);
 		glEnable(GL_DEPTH_TEST);
-		glDisable(GL_BLEND);
 		glDisable(GL_STENCIL_TEST);
 
-		glClearColor(0, 0, 0, 1);
+		glEnable(GL_BLEND);
+		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+		glClearColor(0, 0, 0, 0);
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
 
 		glm_perspective(deg2rad(90), width / (float)height, 0.1f, 100, projMat);
