@@ -199,7 +199,30 @@ void mat4_ypr(float yaw, float pitch, float roll);
 void mat4_lookat(mat4* m, vec3 pos, vec3 target, vec3 up);
 void mat4_frustum(mat4* m, float l, float r, float b, float t, float n, float f);
 void mat4_perspective(mat4* m, float fovy, float aspect, float n, float f);
-void mat4_ortho(mat4* m, float l, float r, float b, float t, float n, float f);
+
+void mat4_ortho(mat4* m, float l, float r, float b, float t, float n, float f) {
+	float* M = m->m;
+
+	M[0] = 2 / (r - l);
+	M[1] = 0;
+	M[2] = 0;
+	M[3] = -(r + l) / (r - l);
+
+	M[4] = 0;
+	M[5] = 2 / (t - b);
+	M[6] = 0;
+	M[7] = -(t + b) / (t - b);
+
+	M[8] = 0;
+	M[9] = 0;
+	M[10] = -2 / (f - n);
+	M[11] = -(f + n) / (f - n);
+
+	M[12] = 0;
+	M[13] = 0;
+	M[14] = 0;
+	M[15] = 1;
+}
 
 void mat4_print(mat4* m) {
 	float* M = m->m;
@@ -345,15 +368,6 @@ void sigsegv_func(int signo) {
 int main(int argc, char** argv) {
 	signal(SIGSEGV, sigsegv_func);
 
-	mat4 a;
-	mat4_identity(&a);
-
-	mat4_translate(&a, (vec3){5, 6, 7});
-	mat4_translate(&a, (vec3){1, 2, 3});
-	mat4_print(&a);
-
-	return 0;
-
 	SDL_Init(SDL_INIT_EVERYTHING);
 
 	window = SDL_CreateWindow("RoyalHackaway", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, width, height, SDL_WINDOW_OPENGL);
@@ -371,6 +385,40 @@ int main(int argc, char** argv) {
 
 	SDL_GL_SetSwapInterval(1);
 
+	GLuint prog = loadShaderProg("data/shaders/shader.vs", "data/shaders/shader.fs");
+	GLuint mat_loc = glGetUniformLocation(prog, "u_mat");
+
+	GLuint vao;
+	glGenVertexArrays(1, &vao);
+	glBindVertexArray(vao);
+
+	GLuint vbo;
+	glGenBuffers(1, &vbo);
+	glBindBuffer(GL_ARRAY_BUFFER, vbo);
+
+	float data[] = {
+		0, 0, 0, 1, 0, 0,
+		1, 0, 0, 0, 1, 0,
+		0, 1, 0, 0, 0, 1,
+		1, 1, 0, 1, 1, 0,
+	};
+	glBufferData(GL_ARRAY_BUFFER, sizeof(data), data, GL_STATIC_DRAW);
+
+	glEnableVertexAttribArray(0);
+	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), 0);
+
+	glEnableVertexAttribArray(1);
+	glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(3 * sizeof(float)));
+
+	GLuint ebo;
+	glGenBuffers(1, &ebo);
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo);
+	unsigned int indices[] = {
+		0, 1, 2,
+		1, 2, 3,
+	};
+	glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
+
 	while (running) {
 		SDL_Event e;
 		while (SDL_PollEvent(&e)) {
@@ -385,6 +433,17 @@ int main(int argc, char** argv) {
 
 		glClearColor(0, 0, 0, 1);
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
+
+		glUseProgram(prog);
+		glBindVertexArray(vao);
+
+		mat4 mat;
+		mat4_ortho(&mat, 0, width, 0, height, -1, 1);
+		mat4_print(&mat);
+		mat4_scale(&mat, (vec3){100, 100, 1});
+		glUniformMatrix4fv(mat_loc, 1, GL_TRUE, mat.m);
+
+		glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, NULL);
 
 		SDL_GL_SwapWindow(window);
 
