@@ -294,26 +294,26 @@ void mat4_rotatez(mat4* m, float t) {
 
 void mat4_ypr(float yaw, float pitch, float roll);
 
-// void mat4_lookat(mat4* m, vec3 pos, vec3 target, vec3 up) {
-// 	vec3 zaxis = vec3_normalize(vec3_sub(target, pos));
-// 	vec3 xaxis = vec3_normalize(vec3_cross(up, zaxis));
-// 	vec3 yaxis = vec3_cross(zaxis, xaxis);
+void mat4_lookat(mat4* m, vec3 pos, vec3 target, vec3 up) {
+	vec3 zaxis = vec3_normalize(vec3_sub(target, pos));
+	vec3 xaxis = vec3_normalize(vec3_cross(up, zaxis));
+	vec3 yaxis = vec3_cross(zaxis, xaxis);
 
-// 	// mat4 lam = {
-// 	// 	xaxis.x, yaxis.x, zaxis.x, 0,
-// 	// 	xaxis.y, yaxis.y, zaxis.y, 0,
-// 	// 	xaxis.z, yaxis.z, zaxis.z, 0,
-// 	// 	-vec3_dot(xaxis, pos), -vec3_dot(yaxis, pos), -vec3_dot(zaxis, pos), 1
-// 	// };
-// 	mat4 lam = {
-// 		xaxis.x, xaxis.y, xaxis.z, -vec3_dot(xaxis, pos),
-// 		yaxis.x, yaxis.y, yaxis.z, -vec3_dot(yaxis, pos),
-// 		zaxis.x, zaxis.y, zaxis.z, -vec3_dot(zaxis, pos),
-// 		0, 0, 0, 1
-// 	};
+	// mat4 lam = {
+	// 	xaxis.x, yaxis.x, zaxis.x, 0,
+	// 	xaxis.y, yaxis.y, zaxis.y, 0,
+	// 	xaxis.z, yaxis.z, zaxis.z, 0,
+	// 	-vec3_dot(xaxis, pos), -vec3_dot(yaxis, pos), -vec3_dot(zaxis, pos), 1
+	// };
+	mat4 lam = {
+		xaxis.x, xaxis.y, xaxis.z, -vec3_dot(xaxis, pos),
+		yaxis.x, yaxis.y, yaxis.z, -vec3_dot(yaxis, pos),
+		zaxis.x, zaxis.y, zaxis.z, -vec3_dot(zaxis, pos),
+		0, 0, 0, 1
+	};
 
-// 	mat4_mul(m, m, &lam);
-// }
+	mat4_mul(m, m, &lam);
+}
 
 void mat4_frustum(mat4* m, float l, float r, float b, float t, float n, float f);
 
@@ -755,9 +755,12 @@ int main(int argc, char** argv) {
 		mat4 mat;
 		mat4_identity(&mat);
 		// mat4_perspective(&mat, deg2rad(90), width / (float)height, 0, 100);
+		// mat4_lookat(&mat, (vec3){5, 5, 5}, (vec3){0, 0, 0}, (vec3){0, 1, 0});
 
-		// mat4_translate(&mat, (vec3){0, 0, 5});
-		// mat4_rotatex(&mat, deg2rad(90));
+		// mat4_translate(&mat, (vec3){0, 0, -2 + sinf(3 * frameNo / 60.0f)});
+		// mat4_rotatey(&mat, 1);
+		// mat4_rotatex(&mat, sinf(frameNo / 60.0 * 2) / 2);
+		// mat4_translate(&mat, (vec3){0, 0, -2});
 
 		mat4_rotatey(&mat, frameNo / 60.0f * deg2rad(60));
 		mat4_rotatex(&mat, frameNo / 60.0f * deg2rad(60));
