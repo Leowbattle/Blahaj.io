@@ -754,7 +754,7 @@ int main(int argc, char** argv) {
 
 		mat4 mat;
 		mat4_identity(&mat);
-		// mat4_perspective(&mat, deg2rad(90), width / (float)height, 0, 100);
+		mat4_perspective(&mat, deg2rad(90), width / (float)height, 0, 100);
 		// mat4_lookat(&mat, (vec3){5, 5, 5}, (vec3){0, 0, 0}, (vec3){0, 1, 0});
 
 		// mat4_translate(&mat, (vec3){0, 0, -2 + sinf(3 * frameNo / 60.0f)});
