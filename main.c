@@ -62,6 +62,22 @@ struct NVGcontext* vg;
 int width = 1280;
 int height = 720;
 
+uint8_t* keyboardState = NULL;
+uint8_t* lastKeyboardState = NULL;
+
+void updateKeyboard() {
+	int numKeys;
+	const uint8_t* kb = SDL_GetKeyboardState(&numKeys);
+
+	if (keyboardState == NULL) {
+		keyboardState = malloc(numKeys);
+		lastKeyboardState = malloc(numKeys);
+	}
+
+	memcpy(lastKeyboardState, keyboardState, numKeys);
+	memcpy(keyboardState, kb, numKeys);
+}
+
 int frameNo = 0;
 float globalTime = 0;
 float dt = 1 / 60.0f;
@@ -390,7 +406,18 @@ GLuint tex_loc;
 
 struct {
 	vec3 pos;
+	vec3 dir;
+	float speed;
+	float speedY;
+
 	Model* model;
+
+	float yaw;
+	float pitch;
+	float roll;
+
+	float pitchTarget;
+	float rollTarget;
 
 	vec3 camPos;
 	vec3 camTarget;
@@ -399,19 +426,90 @@ struct {
 void Blahaj_init() {
 	Blahaj.model = Model_load("data/models/blahaj.obj");
 
+	Blahaj.yaw = 0;
+
+	Blahaj.pitchTarget = 0;
+	Blahaj.pitch = 0;
+
 	glm_vec3_copy((vec3){0, 0, 0}, Blahaj.pos);
-	glm_vec3_copy((vec3){0, 1, 1}, Blahaj.camPos);
+	glm_vec3_copy((vec3){2, 2, 0}, Blahaj.camPos);
 }
 
 void Blahaj_update() {
+	const float turnRoll = deg2rad(30);
+	const float acceleration = 2;
+	const float deceleration = 5;
+	const float maxSpeed = 5;
+	const float gravity = 3;
+	const float bouyancy = 30;
+	const float jumpImpulse = 10;
 
+	Blahaj.rollTarget = 0;
+
+	if (keyboardState[SDL_SCANCODE_LEFT]) {
+		Blahaj.yaw += 0.1f;
+		Blahaj.rollTarget = turnRoll;
+	}
+	if (keyboardState[SDL_SCANCODE_RIGHT]) {
+		Blahaj.yaw -= 0.1f;
+		Blahaj.rollTarget = -turnRoll;
+	}
+
+	glm_vec3_copy((vec3){-1, 0, 0}, Blahaj.dir);
+	glm_vec3_rotate(Blahaj.dir, Blahaj.yaw, (vec3){0, 1, 0});
+
+	if (keyboardState[SDL_SCANCODE_SPACE] && Blahaj.pos[1] <= 0) {
+		Blahaj.speedY += jumpImpulse;
+	}
+	Blahaj.pos[1] += Blahaj.speedY * dt;
+
+	if (Blahaj.pos[1] >= 0) {
+		Blahaj.speedY -= gravity * dt;
+	}
+	else if (Blahaj.pos[1] <= 0) {
+		Blahaj.speedY = 0;
+	}
+
+	bool accelerating = false;
+	if (keyboardState[SDL_SCANCODE_UP]) {
+		accelerating = true;
+
+		Blahaj.speed = clampf(Blahaj.speed + acceleration * dt, 0, maxSpeed);
+	}
+	if (keyboardState[SDL_SCANCODE_DOWN]) {
+		accelerating = true;
+	}
+
+	if (accelerating) {
+		Blahaj.pitchTarget = sinf(2 * PI * globalTime * 2) * deg2rad(7);
+	} else {
+		Blahaj.pitchTarget = 0;
+		Blahaj.speed = clampf(Blahaj.speed - deceleration * dt, 0, maxSpeed);
+	}
+
+	Blahaj.pitch = lerpf(Blahaj.pitch, Blahaj.pitchTarget, 15 * dt);
+	Blahaj.roll = lerpf(Blahaj.roll, Blahaj.rollTarget, 15 * dt);
+
+	vec3 v = {2, 2, 0};
+	glm_vec3_rotate(v, Blahaj.yaw, (vec3){0, 1, 0});
+	glm_vec3_add(v, Blahaj.pos, Blahaj.camTarget);
+
+	float lerpK = 15 * dt;
+	glm_vec3_lerp(Blahaj.camPos, Blahaj.camTarget, lerpK, Blahaj.camPos);
+
+	vec3 d_pos;
+	glm_vec3_scale(Blahaj.dir, Blahaj.speed * dt, d_pos);
+	glm_vec3_add(Blahaj.pos, d_pos, Blahaj.pos);
 
 	glUseProgram(texturedShader);
 	glBindVertexArray(Blahaj.model->vao);
 
 	mat4 modelMat;
 	glm_mat4_identity(modelMat);
-	glm_rotate_y(modelMat, frameNo / 60.0f * deg2rad(60), modelMat);
+	glm_translate(modelMat, Blahaj.pos);
+	glm_rotate_y(modelMat, Blahaj.yaw, modelMat);
+	glm_rotate_z(modelMat, Blahaj.pitch, modelMat);
+	glm_rotate_x(modelMat, Blahaj.roll, modelMat);
 
 	mat4 mvp;
 	glm_mat4_mul(projMat, viewMat, mvp);
@@ -583,6 +681,8 @@ int main(int argc, char** argv) {
 				break;
 			}
 		}
+
+		updateKeyboard();
 
 		glEnable(GL_CULL_FACE);
 		glEnable(GL_DEPTH_TEST);
