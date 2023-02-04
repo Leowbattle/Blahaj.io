@@ -408,9 +408,6 @@ struct {
 	vec3 pos;
 	vec3 dir;
 	float speed;
-	float speedY;
-
-	bool canJump;
 
 	Model* model;
 
@@ -434,11 +431,11 @@ void Blahaj_init() {
 	Blahaj.pitch = 0;
 	Blahaj.roll = 0;
 
-	Blahaj.canJump = true;
-
 	glm_vec3_copy((vec3){0, 0, 0}, Blahaj.pos);
 	glm_vec3_copy((vec3){2, 2, 0}, Blahaj.camPos);
 }
+
+void Water_add_pulse(float strength, float size, float cx, float cy);
 
 void Blahaj_update() {
 	const float turnRoll = deg2rad(30);
@@ -450,12 +447,7 @@ void Blahaj_update() {
 	const float jumpImpulse = 3;
 	const float maxSpeedY = 4;
 
-	if (Blahaj.roll > PI) {
-		Blahaj.rollTarget = 2 * PI;
-	}
-	else {
-		Blahaj.rollTarget = 0;
-	}
+	Blahaj.rollTarget = 0;
 
 	if (keyboardState[SDL_SCANCODE_LEFT]) {
 		Blahaj.yaw += 0.1f;
@@ -469,32 +461,13 @@ void Blahaj_update() {
 	glm_vec3_copy((vec3){-1, 0, 0}, Blahaj.dir);
 	glm_vec3_rotate(Blahaj.dir, Blahaj.yaw, (vec3){0, 1, 0});
 
-	if (keyboardState[SDL_SCANCODE_SPACE] && Blahaj.canJump) {
-		Blahaj.speedY += jumpImpulse;
-		Blahaj.canJump = false;
-		Blahaj.rollTarget += 2 * PI;
-	}
-
-	bool aboveBefore = Blahaj.pos[1] > 0;
-	Blahaj.pos[1] += Blahaj.speedY * dt;
-	if (aboveBefore && Blahaj.pos[1] < 0) {
-		Blahaj.canJump = true;
-	}
-
-	if (Blahaj.pos[1] >= 0) {
-		Blahaj.speedY -= gravity * dt;
-	}
-	else if (Blahaj.pos[1] <= 0) {
-		Blahaj.speedY -= Blahaj.pos[1] * bouyancy * dt;
-	}
-
-	Blahaj.speedY = clampf(Blahaj.speedY, -maxSpeedY, maxSpeedY);
-
 	bool accelerating = false;
 	if (keyboardState[SDL_SCANCODE_UP]) {
 		accelerating = true;
 
 		Blahaj.speed = clampf(Blahaj.speed + acceleration * dt, 0, maxSpeed);
+
+		Water_add_pulse(1, 1, 0, 0);
 	}
 	if (keyboardState[SDL_SCANCODE_DOWN]) {
 		accelerating = true;
@@ -509,12 +482,7 @@ void Blahaj_update() {
 
 	Blahaj.pitch = lerpf(Blahaj.pitch, Blahaj.pitchTarget, 15 * dt);
 	
-	if (Blahaj.canJump) {
-		Blahaj.roll = lerpf(Blahaj.roll, Blahaj.rollTarget, 15 * dt);
-	}
-	else {
-		Blahaj.roll += deg2rad(90) * dt;
-	}
+	Blahaj.roll = lerpf(Blahaj.roll, Blahaj.rollTarget, 15 * dt);
 
 	vec3 v = {2, 2, 0};
 	glm_vec3_rotate(v, Blahaj.yaw, (vec3){0, 1, 0});
@@ -557,6 +525,7 @@ struct {
 
 	float* u;
 	float* dudt;
+	vec3* normals;
 	float c;
 	int sim_size;
 	float size;
@@ -626,21 +595,50 @@ void Water_init() {
 	view_loc2 = glGetUniformLocation(Water.shader, "u_view");
 }
 
-void Water_step_sim() {
+void Water_add_pulse(float strength, float size, float cx, float cy) {
 	for (int i = 0; i < Water.sim_size; i++) {
 		for (int j = 0; j < Water.sim_size; j++) {
 			float x = mapf(j, 0, Water.sim_size - 1, -Water.size / 2, Water.size / 2);
 			float y = mapf(i, 0, Water.sim_size - 1, -Water.size / 2, Water.size / 2);
 
-			Water.u[i * Water.sim_size + j] = sin(sqrtf(x * x + y * y)*4 + globalTime) / 16;
+			float u = strength * expf(-(x * x + y * y) / size);
+
+			Water.u[i * Water.sim_size + j] += u;
+		}
+	}
+}
+
+void Water_step_sim() {
+	float c = 4;
+
+	for (int i = 1; i < Water.sim_size - 1; i++) {
+		for (int j = 1; j < Water.sim_size - 1; j++) {
+			float dx = Water.size / Water.sim_size;
+
+			float dudx = Water.u[i * Water.sim_size + j - 1] - 2 * Water.u[i * Water.sim_size + j] + Water.u[i * Water.sim_size + j + 1];
+      		float dudy = Water.u[(i - 1) * Water.sim_size + j] - 2 * Water.u[i * Water.sim_size + j] + Water.u[(i + 1) * Water.sim_size + j];
+      		dudx /= dx * dx;
+			dudy /= dx * dx;
+			Water.dudt[i * Water.sim_size + j] += (dudx + dudy) * c * c * dt;
 		}
 	}
 
+	for (int i = 0; i < Water.sim_size; i++) {
+		for (int j = 0; j < Water.sim_size; j++) {
+			// float x = mapf(j, 0, Water.sim_size - 1, -Water.size / 2, Water.size / 2);
+			// float y = mapf(i, 0, Water.sim_size - 1, -Water.size / 2, Water.size / 2);
+
+			// Water.u[i * Water.sim_size + j] = sin(sqrtf(x * x + y * y)*4 + globalTime) / 16;
+
+			Water.u[i * Water.sim_size + j] += Water.dudt[i * Water.sim_size + j] * dt;
+		}
+	}
 	glBufferSubData(GL_ARRAY_BUFFER, 0, Water.sim_size * Water.sim_size * sizeof(float), Water.u);
 }
 
 void Water_update() {
 	glBindVertexArray(Water.vao);
+	glBindBuffer(GL_ARRAY_BUFFER, Water.vbo_u);
 
 	Water_step_sim();
 
@@ -656,7 +654,7 @@ void Water_update() {
 	glUniformMatrix4fv(mat_loc2, 1, GL_FALSE, (float*)mvp);
 	glUniformMatrix4fv(view_loc2, 1, GL_FALSE, (float*)viewMat);
 
-	glDrawElements(GL_LINES, Water.sim_size * Water.sim_size * 6, GL_UNSIGNED_INT, NULL);
+	glDrawElements(GL_TRIANGLES, Water.sim_size * Water.sim_size * 6, GL_UNSIGNED_INT, NULL);
 
 	glBindVertexArray(0);
 }
@@ -713,7 +711,7 @@ int main(int argc, char** argv) {
 		glEnable(GL_CULL_FACE);
 		glEnable(GL_DEPTH_TEST);
 		glDisable(GL_BLEND);
-		glDisable(GL_STENCIL);
+		glDisable(GL_STENCIL_TEST);
 
 		glClearColor(0, 0, 0, 1);
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
