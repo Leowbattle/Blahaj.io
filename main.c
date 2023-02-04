@@ -184,7 +184,14 @@ void mat4_scale(mat4* m, vec3 s) {
 	M[10] *= s.z;
 }
 
-void mat4_translate(mat4* m, vec3 t);
+void mat4_translate(mat4* m, vec3 t) {
+	float* M = m->m;
+
+	M[3] += M[0] * t.x + M[1] * t.y + M[2] * t.z;
+	M[7] += M[4] * t.x + M[5] * t.y + M[6] * t.z;
+	M[11] += M[8] * t.x + M[9] * t.y + M[10] * t.z;
+}
+
 void mat4_rotatex(mat4* m, float t);
 void mat4_rotatey(mat4* m, float t);
 void mat4_rotatez(mat4* m, float t);
@@ -338,14 +345,11 @@ void sigsegv_func(int signo) {
 int main(int argc, char** argv) {
 	signal(SIGSEGV, sigsegv_func);
 
-	mat4 a = {
-		1, 2, 3, 4,
-		5, 6, 7, 8,
-		9, 10, 11, 12,
-		13, 14, 15, 16
-	};
+	mat4 a;
+	mat4_identity(&a);
 
-	mat4_scale(&a, (vec3){5, 6, 7});
+	mat4_translate(&a, (vec3){5, 6, 7});
+	mat4_translate(&a, (vec3){1, 2, 3});
 	mat4_print(&a);
 
 	return 0;
