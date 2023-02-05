@@ -418,6 +418,7 @@ struct {
 	float speed;
 
 	float scale;
+	float scaleTarget;
 
 	Model* model;
 
@@ -442,18 +443,36 @@ void Blahaj_init() {
 	Blahaj.roll = 0;
 
 	Blahaj.scale = 1;
+	Blahaj.scaleTarget = 1;
 
 	glm_vec3_copy((vec3){0, 0, 0}, Blahaj.pos);
 	glm_vec3_copy((vec3){2, 2, 0}, Blahaj.camPos);
 }
 
+struct {
+	GLuint vao;
+	GLuint ebo;
+	GLuint vbo_xy;
+	GLuint vbo_u;
+	GLuint vbo_normal;
+
+	float* u;
+	float* dudt;
+	vec3* normals;
+	float c;
+	int sim_size;
+	float size;
+
+	GLuint shader;
+} Water;
+
 void Water_add_pulse(float strength, float size, float cx, float cy);
 
 void Blahaj_update() {
 	const float turnRoll = deg2rad(30);
-	const float acceleration = 2;
+	const float acceleration = 5;
 	const float deceleration = 5;
-	const float maxSpeed = 5;
+	const float maxSpeed = 20;
 	const float gravity = 3;
 	const float bouyancy = 5;
 	const float jumpImpulse = 3;
@@ -496,6 +515,8 @@ void Blahaj_update() {
 	
 	Blahaj.roll = lerpf(Blahaj.roll, Blahaj.rollTarget, 15 * dt);
 
+	Blahaj.scale = lerpf(Blahaj.scale, Blahaj.scaleTarget, 15 * dt);
+
 	vec3 v = {4 * Blahaj.scale, 2 * Blahaj.scale, 0};
 	glm_vec3_rotate(v, Blahaj.yaw, (vec3){0, 1, 0});
 	glm_vec3_add(v, Blahaj.pos, Blahaj.camTarget);
@@ -506,6 +527,19 @@ void Blahaj_update() {
 	vec3 d_pos;
 	glm_vec3_scale(Blahaj.dir, Blahaj.speed * dt, d_pos);
 	glm_vec3_add(Blahaj.pos, d_pos, Blahaj.pos);
+
+	if (Blahaj.pos[0] < -Water.size / 2) {
+		Blahaj.pos[0] = Water.size / 2;
+	}
+	if (Blahaj.pos[0] > Water.size / 2) {
+		Blahaj.pos[0] = -Water.size / 2;
+	}
+	if (Blahaj.pos[2] < -Water.size / 2) {
+		Blahaj.pos[2] = Water.size / 2;
+	}
+	if (Blahaj.pos[2] > Water.size / 2) {
+		Blahaj.pos[2] = -Water.size / 2;
+	}
 
 	glUseProgram(texturedShader);
 	glBindVertexArray(Blahaj.model->vao);
@@ -529,23 +563,6 @@ void Blahaj_update() {
 
 	glDrawArrays(GL_TRIANGLES, 0, Blahaj.model->vertexCount);
 }
-
-struct {
-	GLuint vao;
-	GLuint ebo;
-	GLuint vbo_xy;
-	GLuint vbo_u;
-	GLuint vbo_normal;
-
-	float* u;
-	float* dudt;
-	vec3* normals;
-	float c;
-	int sim_size;
-	float size;
-
-	GLuint shader;
-} Water;
 
 GLuint mat_loc2;
 GLuint view_loc2;
@@ -689,6 +706,13 @@ void Water_step_sim() {
 	glBufferSubData(GL_ARRAY_BUFFER, 0, Water.sim_size * Water.sim_size * sizeof(vec3), Water.normals);
 }
 
+struct {
+	GLuint shader;
+	GLuint vao;
+	GLuint vbo;
+	GLuint texture;
+} Sky;
+
 void Water_update() {
 	glBindVertexArray(Water.vao);
 	glBindBuffer(GL_ARRAY_BUFFER, Water.vbo_u);
@@ -711,13 +735,6 @@ void Water_update() {
 
 	glBindVertexArray(0);
 }
-
-struct {
-	GLuint shader;
-	GLuint vao;
-	GLuint vbo;
-	GLuint texture;
-} Sky;
 
 GLuint projLoc3;
 GLuint viewLoc3;
@@ -843,10 +860,13 @@ void Sky_update() {
 
 typedef struct Fish {
 	vec3 pos;
+	float scale;
 	float yaw;
 	float targetYaw;
 
 	int turnTimer;
+
+	bool dead;
 } Fish;
 
 Vector* fishes;
@@ -859,17 +879,15 @@ void Fishs_init() {
 
 	int n = 100;
 	for (int i = 0; i < n; i++) {
-		float ct = cosf((float)i / n * 2 * PI);
-		float st = sinf((float)i / n * 2 * PI);
-		float r = 10;
-
 		Fish fish;
-		fish.pos[0] = r * ct;
+		fish.pos[0] = float_rand(-Water.size / 2, Water.size / 2);
 		fish.pos[1] = 0;
-		fish.pos[2] = r * st;
+		fish.pos[2] = float_rand(-Water.size / 2, Water.size / 2);
 		fish.yaw = float_rand(0, 2 * PI);
+		fish.scale = 1;
 		fish.targetYaw = fish.yaw;
 		fish.turnTimer = 0;
+		fish.dead = false;
 		Vector_add(fishes, &fish);
 	}
 }
@@ -888,19 +906,19 @@ void Fishs_update() {
 		fish->pos[2] += fishSpeed * sinf(fish->yaw) * dt;
 
 		if (fish->pos[0] < -Water.size / 2) {
-			fish->yaw = PI / 2 - fish->yaw;
+			fish->pos[0] = Water.size / 2;
 			// fish->pos[1] = 10;
 		}
 		if (fish->pos[0] > Water.size / 2) {
-			fish->yaw = -PI / 2 - fish->yaw;
+			fish->pos[0] = -Water.size / 2;
 			// fish->pos[1] = 10;
 		}
 		if (fish->pos[2] < -Water.size / 2) {
-			fish->yaw = PI - fish->yaw;
+			fish->pos[2] = Water.size / 2;
 			// fish->pos[1] = 10;
 		}
 		if (fish->pos[2] > Water.size / 2) {
-			fish->yaw = -PI - fish->yaw;
+			fish->pos[2] = -Water.size / 2;
 			// fish->pos[1] = 10;
 		}
 
@@ -910,11 +928,18 @@ void Fishs_update() {
 			fish->targetYaw = fish->yaw + float_rand(-turnMax, turnMax);
 		}
 		fish->yaw = lerpf(fish->yaw, fish->targetYaw, 0.05f);
+
+		float d2 = glm_vec3_distance2(Blahaj.pos, fish->pos);
+		if (d2 < Blahaj.scale * 4) {
+			Blahaj.scaleTarget += 0.1f;
+			fish->dead = true;
+		}
 	
 		mat4 modelMat;
 		glm_mat4_identity(modelMat);
 		glm_translate(modelMat, fish->pos);
 		glm_rotate_y(modelMat, PI-fish->yaw, modelMat);
+		glm_scale_uni(modelMat, fish->scale);
 
 		mat4 mvp;
 		glm_mat4_mul(projMat, viewMat, mvp);
@@ -928,6 +953,13 @@ void Fishs_update() {
 		glDrawArrays(GL_TRIANGLES, 0, fishModel->vertexCount);
 	}
 
+	for (int i = 0; i < fishes->count; i++) {
+		Fish* fish = &((Fish*)fishes->data)[i];
+
+		if (fish->dead) {
+			((Fish*)fishes->data)[i] = ((Fish*)fishes->data)[--fishes->count];
+		}
+	}
 }
 
 void sigsegv_func(int signo) {
@@ -947,6 +979,7 @@ NVGpaint logoPaint;
 void MENU_init() {
 	state = STATE_MENU;
 
+	stbi_set_flip_vertically_on_load(0);
 	logoImg = nvgCreateImage(vg, "data/logo.png", 0);
 	logoPaint = nvgImagePattern(vg, 0, 0, width, height, 0, logoImg, 1);
 }
@@ -980,16 +1013,6 @@ void MENU_update() {
 
 void GAME_init() {
 	state = STATE_GAME;
-
-	texturedShader = loadShaderProg("data/shaders/shader.vs", "data/shaders/shader.fs");
-	mat_loc = glGetUniformLocation(texturedShader, "u_mat");
-	view_loc = glGetUniformLocation(texturedShader, "u_view");
-	tex_loc = glGetUniformLocation(texturedShader, "u_tex");
-
-	Blahaj_init();
-	Water_init();
-	Sky_init();
-	Fishs_init();
 }
 
 void GAME_update() {
@@ -1019,7 +1042,10 @@ void GAME_update() {
 	nvgFontSize(vg, 72.0f);
 	nvgFontFace(vg, "font");
 	nvgTextAlign(vg, NVG_ALIGN_TOP);
-	nvgText(vg, 0, 0, "Hello", NULL);
+
+	char text[256];
+	sprintf(text, "%d", fishes->count);
+	nvgText(vg, 0, 0, text, NULL);
 
 	nvgEndFrame(vg);
 }
@@ -1046,6 +1072,16 @@ int main(int argc, char** argv) {
 	gladLoadGLLoader(SDL_GL_GetProcAddress);
 
 	SDL_GL_SetSwapInterval(1);
+
+	texturedShader = loadShaderProg("data/shaders/shader.vs", "data/shaders/shader.fs");
+	mat_loc = glGetUniformLocation(texturedShader, "u_mat");
+	view_loc = glGetUniformLocation(texturedShader, "u_view");
+	tex_loc = glGetUniformLocation(texturedShader, "u_tex");
+
+	Blahaj_init();
+	Water_init();
+	Sky_init();
+	Fishs_init();
 
 	vg = nvgCreateGL3(NVG_ANTIALIAS | NVG_STENCIL_STROKES);
 	nvgCreateFont(vg, "font", "data/Blinker-Regular.ttf");
