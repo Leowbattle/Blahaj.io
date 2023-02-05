@@ -1022,7 +1022,7 @@ int timeLeft;
 void GAME_init() {
 	state = STATE_GAME;
 
-	timeLeft = 3 * 60;
+	timeLeft = 30 * 60;
 }
 
 int logoImg2;
