@@ -1,0 +1,1 @@
+gcc main.c glad.c nanovg-master/src/nanovg.c -I. -I nanovg-master/src -o prog -lm -lSDL2
