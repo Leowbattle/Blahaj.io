@@ -441,7 +441,7 @@ void Blahaj_init() {
 	Blahaj.pitch = 0;
 	Blahaj.roll = 0;
 
-	Blahaj.scale = 5;
+	Blahaj.scale = 1;
 
 	glm_vec3_copy((vec3){0, 0, 0}, Blahaj.pos);
 	glm_vec3_copy((vec3){2, 2, 0}, Blahaj.camPos);
@@ -934,6 +934,96 @@ void sigsegv_func(int signo) {
 	panic("Segmentation fault\n");
 }
 
+typedef enum GameState {
+	STATE_MENU,
+	STATE_GAME,
+} GameState;
+
+GameState state;
+
+int logoImg;
+NVGpaint logoPaint;
+
+void MENU_init() {
+	state = STATE_MENU;
+
+	logoImg = nvgCreateImage(vg, "data/logo.png", 0);
+	logoPaint = nvgImagePattern(vg, 0, 0, width, height, 0, logoImg, 1);
+}
+
+void GAME_init();
+
+void MENU_update() {
+	glEnable(GL_CULL_FACE);
+	glEnable(GL_DEPTH_TEST);
+	glDisable(GL_STENCIL_TEST);
+
+	glEnable(GL_BLEND);
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+	glClearColor(0, 0, 0, 0);
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
+
+	nvgBeginFrame(vg, width, height, 1);
+
+	nvgBeginPath(vg);
+	nvgFillPaint(vg, logoPaint);
+	nvgRect(vg, 0, 0, width, height);
+	nvgFill(vg);
+
+	nvgEndFrame(vg);
+
+	if (keyboardState[SDL_SCANCODE_RETURN]) {
+		GAME_init();
+	}
+}
+
+void GAME_init() {
+	state = STATE_GAME;
+
+	texturedShader = loadShaderProg("data/shaders/shader.vs", "data/shaders/shader.fs");
+	mat_loc = glGetUniformLocation(texturedShader, "u_mat");
+	view_loc = glGetUniformLocation(texturedShader, "u_view");
+	tex_loc = glGetUniformLocation(texturedShader, "u_tex");
+
+	Blahaj_init();
+	Water_init();
+	Sky_init();
+	Fishs_init();
+}
+
+void GAME_update() {
+	glEnable(GL_CULL_FACE);
+	glEnable(GL_DEPTH_TEST);
+	glDisable(GL_STENCIL_TEST);
+
+	glEnable(GL_BLEND);
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+	glClearColor(0, 0, 0, 0);
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
+
+	glm_perspective(deg2rad(90), width / (float)height, 0.1f, 100, projMat);
+	
+	vec3 up = {0, 1, 0};
+	glm_lookat(Blahaj.camPos, Blahaj.pos, up, viewMat);
+
+	Sky_update();
+	Blahaj_update();
+	Fishs_update();
+	Water_update();
+
+	nvgBeginFrame(vg, width, height, 1);
+
+	nvgFillColor(vg, nvgRGBA(255,192,0,255));
+	nvgFontSize(vg, 72.0f);
+	nvgFontFace(vg, "font");
+	nvgTextAlign(vg, NVG_ALIGN_TOP);
+	nvgText(vg, 0, 0, "Hello", NULL);
+
+	nvgEndFrame(vg);
+}
+
 int main(int argc, char** argv) {
 	signal(SIGSEGV, sigsegv_func);
 
@@ -960,15 +1050,7 @@ int main(int argc, char** argv) {
 	vg = nvgCreateGL3(NVG_ANTIALIAS | NVG_STENCIL_STROKES);
 	nvgCreateFont(vg, "font", "data/Blinker-Regular.ttf");
 
-	Blahaj_init();
-	Water_init();
-	Sky_init();
-	Fishs_init();
-
-	texturedShader = loadShaderProg("data/shaders/shader.vs", "data/shaders/shader.fs");
-	mat_loc = glGetUniformLocation(texturedShader, "u_mat");
-	view_loc = glGetUniformLocation(texturedShader, "u_view");
-	tex_loc = glGetUniformLocation(texturedShader, "u_tex");
+	MENU_init();
 
 	while (running) {
 		SDL_Event e;
@@ -984,35 +1066,16 @@ int main(int argc, char** argv) {
 
 		updateKeyboard();
 
-		glEnable(GL_CULL_FACE);
-		glEnable(GL_DEPTH_TEST);
-		glDisable(GL_STENCIL_TEST);
-
-		glEnable(GL_BLEND);
-		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-
-		glClearColor(0, 0, 0, 0);
-		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
-
-		glm_perspective(deg2rad(90), width / (float)height, 0.1f, 100, projMat);
-		
-		vec3 up = {0, 1, 0};
-		glm_lookat(Blahaj.camPos, Blahaj.pos, up, viewMat);
-
-		Sky_update();
-		Blahaj_update();
-		Fishs_update();
-		Water_update();
-
-		nvgBeginFrame(vg, width, height, 1);
-
-		nvgFillColor(vg, nvgRGBA(255,192,0,255));
-		nvgFontSize(vg, 72.0f);
-		nvgFontFace(vg, "font");
-		nvgTextAlign(vg, NVG_ALIGN_TOP);
-		nvgText(vg, 0, 0, "Hello", NULL);
-
-		nvgEndFrame(vg);
+		switch (state) {
+		case STATE_MENU:
+			MENU_update();
+			break;
+		case STATE_GAME:
+			GAME_update();
+			break;
+		default:
+			panic("Invalid game state %d\n", state);
+		}
 
 		SDL_GL_SwapWindow(window);
 
