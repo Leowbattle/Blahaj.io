@@ -864,6 +864,8 @@ typedef struct Fish {
 	float yaw;
 	float targetYaw;
 
+	float roll;
+
 	int turnTimer;
 
 	bool dead;
@@ -884,6 +886,7 @@ void Fishs_init() {
 		fish.pos[1] = 0;
 		fish.pos[2] = float_rand(-Water.size / 2, Water.size / 2);
 		fish.yaw = float_rand(0, 2 * PI);
+		fish.roll = float_rand(0, 2 * PI);
 		fish.scale = 1;
 		fish.targetYaw = fish.yaw;
 		fish.turnTimer = 0;
@@ -929,6 +932,8 @@ void Fishs_update() {
 		}
 		fish->yaw = lerpf(fish->yaw, fish->targetYaw, 0.05f);
 
+		fish->roll += deg2rad(90) * dt;
+
 		float d2 = glm_vec3_distance2(Blahaj.pos, fish->pos);
 		if (d2 < Blahaj.scale * 4) {
 			Blahaj.scaleTarget += 0.1f;
@@ -939,6 +944,7 @@ void Fishs_update() {
 		glm_mat4_identity(modelMat);
 		glm_translate(modelMat, fish->pos);
 		glm_rotate_y(modelMat, PI-fish->yaw, modelMat);
+		glm_rotate_x(modelMat, fish->roll, modelMat);
 		glm_scale_uni(modelMat, fish->scale);
 
 		mat4 mvp;
@@ -969,6 +975,7 @@ void sigsegv_func(int signo) {
 typedef enum GameState {
 	STATE_MENU,
 	STATE_GAME,
+	STATE_OVER,
 } GameState;
 
 GameState state;
@@ -1011,8 +1018,61 @@ void MENU_update() {
 	}
 }
 
+int timeLeft;
 void GAME_init() {
 	state = STATE_GAME;
+
+	timeLeft = 3 * 60;
+}
+
+int logoImg2;
+NVGpaint logoPaint2;
+
+void OVER_init() {
+	state = STATE_OVER;
+
+	stbi_set_flip_vertically_on_load(0);
+	logoImg2 = nvgCreateImage(vg, "data/bg.png", 0);
+	logoPaint2 = nvgImagePattern(vg, 0, 0, width, height, 0, logoImg2, 1);
+}
+
+void OVER_update() {
+	glEnable(GL_CULL_FACE);
+	glEnable(GL_DEPTH_TEST);
+	glDisable(GL_STENCIL_TEST);
+
+	glEnable(GL_BLEND);
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+	glClearColor(0, 0, 0, 0);
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
+
+	nvgBeginFrame(vg, width, height, 1);
+
+	nvgBeginPath(vg);
+	nvgFillPaint(vg, logoPaint2);
+	nvgRect(vg, 0, 0, width, height);
+	nvgFill(vg);
+
+	nvgFillColor(vg, nvgRGBA(255,192,0,255));
+	nvgFontSize(vg, 72.0f);
+	nvgFontFace(vg, "font");
+	nvgTextAlign(vg, NVG_ALIGN_TOP);
+
+	char text[256];
+	sprintf(text, "Thanks for playing! Your score is %d", 100 - fishes->count);
+	nvgText(vg, 0, 0, text, NULL);
+
+	nvgEndFrame(vg);
+
+	if (keyboardState[SDL_SCANCODE_RETURN]) {
+		Blahaj_init();
+		// Water_init();
+		// Sky_init();
+		Fishs_init();
+		
+		GAME_init();
+	}
 }
 
 void GAME_update() {
@@ -1044,10 +1104,20 @@ void GAME_update() {
 	nvgTextAlign(vg, NVG_ALIGN_TOP);
 
 	char text[256];
-	sprintf(text, "%d", fishes->count);
+	sprintf(text, "%.2f seconds left!", timeLeft / 60.0f);
 	nvgText(vg, 0, 0, text, NULL);
 
+	sprintf(text, "Score: %d", 100 - fishes->count);
+	nvgTextAlign(vg, NVG_ALIGN_TOP | NVG_ALIGN_RIGHT);
+	nvgText(vg, width, 0, text, NULL);
+
 	nvgEndFrame(vg);
+
+	timeLeft--;
+
+	if (timeLeft < 0) {
+		OVER_init();
+	}
 }
 
 int main(int argc, char** argv) {
@@ -1108,6 +1178,9 @@ int main(int argc, char** argv) {
 			break;
 		case STATE_GAME:
 			GAME_update();
+			break;
+		case STATE_OVER:
+			OVER_update();
 			break;
 		default:
 			panic("Invalid game state %d\n", state);
