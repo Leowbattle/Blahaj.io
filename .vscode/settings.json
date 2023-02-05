@@ -1,0 +1,11 @@
+{
+    "files.associations": {
+        "string.h": "c",
+        "sdl.h": "c",
+        "glad.h": "c",
+        "execinfo.h": "c",
+        "cglm.h": "c",
+        "nanovg.h": "c",
+        "nanovg_gl.h": "c"
+    }
+}

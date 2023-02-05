@@ -844,6 +844,9 @@ void Sky_update() {
 typedef struct Fish {
 	vec3 pos;
 	float yaw;
+	float targetYaw;
+
+	int turnTimer;
 } Fish;
 
 Vector* fishes;
@@ -865,12 +868,15 @@ void Fishs_init() {
 		fish.pos[1] = 0;
 		fish.pos[2] = r * st;
 		fish.yaw = float_rand(0, 2 * PI);
+		fish.targetYaw = fish.yaw;
+		fish.turnTimer = 0;
 		Vector_add(fishes, &fish);
 	}
 }
 
 void Fishs_update() {
-	const float fishSpeed = 5;
+	const float fishSpeed = 15;
+	const float turnMax = deg2rad(90);
 
 	glUseProgram(texturedShader);
 	glBindVertexArray(fishModel->vao);
@@ -880,6 +886,30 @@ void Fishs_update() {
 
 		fish->pos[0] += fishSpeed * cosf(fish->yaw) * dt;
 		fish->pos[2] += fishSpeed * sinf(fish->yaw) * dt;
+
+		if (fish->pos[0] < -Water.size / 2) {
+			fish->yaw = PI / 2 - fish->yaw;
+			// fish->pos[1] = 10;
+		}
+		if (fish->pos[0] > Water.size / 2) {
+			fish->yaw = -PI / 2 - fish->yaw;
+			// fish->pos[1] = 10;
+		}
+		if (fish->pos[2] < -Water.size / 2) {
+			fish->yaw = PI - fish->yaw;
+			// fish->pos[1] = 10;
+		}
+		if (fish->pos[2] > Water.size / 2) {
+			fish->yaw = -PI - fish->yaw;
+			// fish->pos[1] = 10;
+		}
+
+		if (fish->turnTimer++ > 60) {
+			fish->turnTimer = 0;
+
+			fish->targetYaw = fish->yaw + float_rand(-turnMax, turnMax);
+		}
+		fish->yaw = lerpf(fish->yaw, fish->targetYaw, 0.05f);
 	
 		mat4 modelMat;
 		glm_mat4_identity(modelMat);
